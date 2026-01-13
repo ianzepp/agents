@@ -33,6 +33,7 @@ Run Options:
   -m, --model <model>       Model shortcut (default: sonnet)
   --persona <name>          Persona name
   --pr                      Instruct agent to submit a PR
+  --timeout <minutes>       Kill agent after timeout (e.g., 30)
 
 Clean Options:
   --older-than <age>        Remove runs older than (e.g., 7d, 24h)
@@ -50,12 +51,13 @@ Examples:
 `);
 }
 
-async function parseRunArgs(args: string[]): Promise<{ goal: string; options: { repo?: string; issue?: number; model: string; persona?: string; pr?: boolean } }> {
+async function parseRunArgs(args: string[]): Promise<{ goal: string; options: { repo?: string; issue?: number; model: string; persona?: string; pr?: boolean; timeout?: number } }> {
   let repo: string | undefined;
   let issue: number | undefined;
   let model = "sonnet";
   let persona: string | undefined;
   let pr = false;
+  let timeout: number | undefined;
   const goalParts: string[] = [];
 
   for (let i = 0; i < args.length; i++) {
@@ -76,6 +78,9 @@ async function parseRunArgs(args: string[]): Promise<{ goal: string; options: { 
     else if (arg === "--pr") {
       pr = true;
     }
+    else if (arg === "--timeout") {
+      timeout = parseInt(args[++i], 10);
+    }
     else if (!arg.startsWith("-")) {
       goalParts.push(arg);
     }
@@ -95,7 +100,7 @@ async function parseRunArgs(args: string[]): Promise<{ goal: string; options: { 
     process.exit(1);
   }
 
-  return { goal, options: { repo, issue, model, persona, pr } };
+  return { goal, options: { repo, issue, model, persona, pr, timeout } };
 }
 
 function parseCleanArgs(args: string[]): { olderThan?: string; all?: boolean; branches?: boolean } {
