@@ -8,6 +8,7 @@ interface RunInfo {
   model: string;
   status: RunStatus;
   elapsed: string;
+  error?: string;
 }
 
 const STATUS_COLORS: Record<RunStatus, string> = {
@@ -41,6 +42,7 @@ export function ps(): void {
       model: run.model.split("/").pop() ?? run.model,
       status,
       elapsed,
+      error: run.error,
     });
   }
 
@@ -63,6 +65,10 @@ export function ps(): void {
     console.log(
       `${run.id.padEnd(10)} ${repo.padEnd(30)} ${issue.padEnd(7)} ${run.model.padEnd(12)} ${color}${run.status.padEnd(12)}${RESET} ${run.elapsed}`
     );
+    // Show error on next line if present
+    if (run.error) {
+      console.log(`           ${"\x1b[31m"}Error: ${run.error}${RESET}`);
+    }
   }
 }
 

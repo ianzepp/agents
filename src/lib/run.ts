@@ -16,6 +16,12 @@ export interface Run {
   startedAt: string;
   completedAt?: string;
   error?: string;
+  usage?: {
+    input_tokens?: number;
+    output_tokens?: number;
+    total_tokens?: number;
+    cost?: number;
+  };
 }
 
 export function readRun(id: string): Run | null {
@@ -63,6 +69,24 @@ export function getRunStatus(run: Run): RunStatus {
         // Auto-create response.md from output.log
         const output = readFileSync(logPath, "utf-8").trim();
         if (output) {
+          // Try parsing as Claude -p mode JSON output
+          const parsed = parseClaudeOutput(output);
+          if (parsed) {
+            writeFileSync(responsePath, parsed.result);
+            // Update run metadata with usage and errors
+            if (parsed.usage || parsed.errors) {
+              const updatedRun: Run = { ...run, completedAt: new Date().toISOString() };
+              if (parsed.usage) {
+                updatedRun.usage = parsed.usage;
+              }
+              if (parsed.errors && parsed.errors.length > 0) {
+                updatedRun.error = parsed.errors.join("; ");
+              }
+              writeRun(updatedRun);
+            }
+            return "completed";
+          }
+          // Fall back to raw output if not JSON
           writeFileSync(responsePath, output);
           return "completed";
         }
@@ -84,4 +108,33 @@ export function generateBranch(issue: number | undefined, model: string, id: str
   const issueStr = issue ? `issue-${issue}` : "task";
   const modelShort = model.split("/").pop()?.split("-")[0] ?? model;
   return `${issueStr}-${modelShort}-${id}`;
+}
+
+interface ClaudeParsedOutput {
+  result: string;
+  usage?: {
+    input_tokens?: number;
+    output_tokens?: number;
+    total_tokens?: number;
+    cost?: number;
+  };
+  errors?: string[];
+}
+
+function parseClaudeOutput(output: string): ClaudeParsedOutput | null {
+  try {
+    const parsed = JSON.parse(output);
+    // Check if it's Claude -p mode JSON structure
+    if (parsed.type === "result" && parsed.result !== undefined) {
+      return {
+        result: parsed.result,
+        usage: parsed.usage,
+        errors: parsed.errors,
+      };
+    }
+  }
+  catch {
+    // Not JSON or invalid - return null to use raw output
+  }
+  return null;
 }
