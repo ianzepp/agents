@@ -47,14 +47,14 @@ export function getRunStatus(run: Run): RunStatus {
   if (run.status !== "running") return run.status;
 
   const responsePath = join(runDir(run.id), "response.md");
+  let newStatus: RunStatus | null = null;
 
   // Check if response.md exists (successful completion)
   if (existsSync(responsePath)) {
-    return "completed";
+    newStatus = "completed";
   }
-
   // Check if process is still alive
-  if (run.pid && !isProcessRunning(run.pid)) {
+  else if (run.pid && !isProcessRunning(run.pid)) {
     // Process exited - check if there's output to promote to response
     const logPath = runLogPath(run.id);
     try {
@@ -64,15 +64,26 @@ export function getRunStatus(run: Run): RunStatus {
         const output = readFileSync(logPath, "utf-8").trim();
         if (output) {
           writeFileSync(responsePath, output);
-          return "completed";
+          newStatus = "completed";
         }
       }
     }
     catch {
       // Fall through to failed
     }
-    return "failed"; // Process died without output
+    if (!newStatus) {
+      newStatus = "failed"; // Process died without output
+    }
   }
+
+  // Persist status change to run.json
+  if (newStatus) {
+    run.status = newStatus;
+    run.completedAt = new Date().toISOString();
+    writeRun(run);
+    return newStatus;
+  }
+
   return "running";
 }
 
