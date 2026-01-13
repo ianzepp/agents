@@ -6,6 +6,7 @@ import { watch } from "./commands/watch.ts";
 import { logs } from "./commands/logs.ts";
 import { kill } from "./commands/kill.ts";
 import { clean } from "./commands/clean.ts";
+import { response } from "./commands/response.ts";
 import { listModelShortcuts } from "./lib/backend.ts";
 
 const args = process.argv.slice(2);
@@ -19,12 +20,13 @@ Commands:
   ps        List runs
   watch     Follow run output
   logs      Show full run log
+  response  Show final response (if completed)
   kill      Kill a running agent
   clean     Remove old runs
   models    List model shortcuts
 
 Run Options:
-  -r, --repo <owner/repo>   Repository (required)
+  -r, --repo <owner/repo>   Repository (optional, for code tasks)
   -i, --issue <number>      Issue number
   -m, --model <model>       Model shortcut (default: sonnet)
   --persona <name>          Persona name
@@ -71,10 +73,6 @@ async function parseRunArgs(args: string[]): Promise<{ goal: string; options: { 
     }
   }
 
-  if (!repo) {
-    console.error("Error: --repo is required");
-    process.exit(1);
-  }
 
   let goal = goalParts.join(" ");
 
@@ -145,6 +143,16 @@ async function main(): Promise<void> {
         process.exit(1);
       }
       logs(id);
+      break;
+    }
+
+    case "response": {
+      const id = args[1];
+      if (!id) {
+        console.error("Error: run ID required");
+        process.exit(1);
+      }
+      response(id);
       break;
     }
 

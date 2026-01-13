@@ -3,7 +3,7 @@ import { readRun, getRunStatus, type RunStatus } from "../lib/run.ts";
 
 interface RunInfo {
   id: string;
-  repo: string;
+  repo?: string;
   issue?: number;
   model: string;
   status: RunStatus;
@@ -58,9 +58,10 @@ export function ps(): void {
 
   for (const run of runs) {
     const color = STATUS_COLORS[run.status];
+    const repo = run.repo ?? "(no repo)";
     const issue = run.issue ? `#${run.issue}` : "-";
     console.log(
-      `${run.id.padEnd(10)} ${run.repo.padEnd(30)} ${issue.padEnd(7)} ${run.model.padEnd(12)} ${color}${run.status.padEnd(12)}${RESET} ${run.elapsed}`
+      `${run.id.padEnd(10)} ${repo.padEnd(30)} ${issue.padEnd(7)} ${run.model.padEnd(12)} ${color}${run.status.padEnd(12)}${RESET} ${run.elapsed}`
     );
   }
 }

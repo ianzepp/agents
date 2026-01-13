@@ -10,7 +10,7 @@ import { generateRunId, generateBranch, writeRun, type Run } from "../lib/run.ts
 import { openSync } from "fs";
 
 export interface RunOptions {
-  repo: string;
+  repo?: string;
   issue?: number;
   model: string;
   persona?: string;
@@ -21,24 +21,36 @@ export async function run(goal: string, options: RunOptions): Promise<string> {
 
   const id = generateRunId();
   const { backend, model } = resolveModel(options.model);
-  const branch = generateBranch(options.issue, model, id);
+  const branch = options.repo ? generateBranch(options.issue, model, id) : undefined;
 
   console.log(`Creating run ${id}...`);
-  console.log(`  Repo: ${options.repo}`);
+  if (options.repo) {
+    console.log(`  Repo: ${options.repo}`);
+    console.log(`  Branch: ${branch}`);
+  }
   console.log(`  Model: ${model} (${backend})`);
-  console.log(`  Branch: ${branch}`);
 
-  // Ensure bare repo exists and is up to date
-  console.log(`Ensuring bare repo...`);
-  ensureBareRepo(options.repo);
+  let workDir: string;
 
-  // Create worktree
-  console.log(`Creating worktree...`);
-  createWorktree(id, options.repo, branch);
+  if (options.repo) {
+    // Ensure bare repo exists and is up to date
+    console.log(`Ensuring bare repo...`);
+    ensureBareRepo(options.repo);
+
+    // Create worktree
+    console.log(`Creating worktree...`);
+    createWorktree(id, options.repo, branch!);
+    workDir = runRepo(id);
+  }
+  else {
+    // No repo - just use a simple work directory
+    workDir = runDir(id);
+    mkdirSync(workDir, { recursive: true });
+  }
 
   // Set up isolated HOME
   console.log(`Setting up isolated HOME...`);
-  setupIsolatedHome(id, options.repo, goal);
+  setupIsolatedHome(id, workDir, goal);
 
   // Create run metadata
   const runMeta: Run = {
@@ -55,44 +67,49 @@ export async function run(goal: string, options: RunOptions): Promise<string> {
 
   // Spawn the agent
   console.log(`Spawning ${backend}...`);
-  const pid = spawnAgent(id, backend, model, goal);
+  const pid = spawnAgent(id, backend, model, goal, workDir);
   runMeta.pid = pid;
 
   writeRun(runMeta);
 
   console.log(`\nRun ${id} started (PID ${pid})`);
-  console.log(`  Watch: agent watch ${id}`);
-  console.log(`  Logs:  agent logs ${id}`);
+  console.log(`  Watch:    agent watch ${id}`);
+  console.log(`  Logs:     agent logs ${id}`);
+  console.log(`  Response: agent response ${id}`);
 
   return id;
 }
 
-function setupIsolatedHome(runId: string, repo: string, prompt: string): void {
+function setupIsolatedHome(runId: string, workDir: string, prompt: string): void {
   const home = runHome(runId);
-  const repoPath = runRepo(runId);
 
   // Create .claude directory
   mkdirSync(join(home, ".claude"), { recursive: true });
 
-  // Write AGENTS.md to repo
-  writeFileSync(join(repoPath, "AGENTS.md"), prompt);
+  // Wrap prompt with response instructions
+  const wrappedPrompt = wrapPrompt(prompt);
 
-  // Symlink .claude/CLAUDE.md -> repo/AGENTS.md
-  symlinkSync(join(repoPath, "AGENTS.md"), join(home, ".claude", "CLAUDE.md"));
+  // Write AGENTS.md to work directory
+  writeFileSync(join(workDir, "AGENTS.md"), wrappedPrompt);
+
+  // Symlink .claude/CLAUDE.md -> workDir/AGENTS.md
+  symlinkSync(join(workDir, "AGENTS.md"), join(home, ".claude", "CLAUDE.md"));
 
   // Copy credentials from real HOME
   copyCredentials(home);
 
-  // Write settings.json for sandbox mode
+  // Write settings.json for sandbox mode with bypassed permissions
   writeFileSync(
     join(home, ".claude", "settings.json"),
     JSON.stringify(
       {
+        sandbox: {
+          enabled: true,
+        },
         permissions: {
           allow: ["Edit", "Write", "Bash", "Read", "Glob", "Grep"],
-          deny: [],
+          defaultMode: "bypassPermissions",
         },
-        sandbox: true,
       },
       null,
       2
@@ -122,6 +139,17 @@ function copyCredentials(targetHome: string): void {
     }
   }
 
+  // Symlink opencode config directories (auth, storage)
+  const opencodeDataDir = join(realHome, ".local", "share", "opencode");
+  if (existsSync(opencodeDataDir)) {
+    const targetLocal = join(targetHome, ".local", "share");
+    mkdirSync(targetLocal, { recursive: true });
+    const targetOpencode = join(targetLocal, "opencode");
+    if (!existsSync(targetOpencode)) {
+      symlinkSync(opencodeDataDir, targetOpencode);
+    }
+  }
+
   // Create .zshenv with tokens from environment
   const tokens: string[] = [];
   if (process.env.GH_TOKEN) {
@@ -138,9 +166,12 @@ function copyCredentials(targetHome: string): void {
   }
 }
 
-function spawnAgent(runId: string, backend: string, model: string, goal: string): number {
+function wrapPrompt(prompt: string): string {
+  return prompt;
+}
+
+function spawnAgent(runId: string, backend: string, model: string, goal: string, workDir: string): number {
   const home = runHome(runId);
-  const repoPath = runRepo(runId);
   const logPath = runLogPath(runId);
 
   const logFd = openSync(logPath, "w");
@@ -158,7 +189,7 @@ function spawnAgent(runId: string, backend: string, model: string, goal: string)
   }
 
   const child = spawn(cmd, args, {
-    cwd: repoPath,
+    cwd: workDir,
     env: { ...process.env, HOME: home },
     detached: true,
     stdio: ["ignore", logFd, logFd],
