@@ -1,4 +1,4 @@
-import { spawn } from "child_process";
+import { spawn, execSync } from "child_process";
 import { mkdirSync, writeFileSync, symlinkSync, copyFileSync, existsSync } from "fs";
 import { join } from "path";
 import { homedir } from "os";
@@ -15,6 +15,26 @@ export interface RunOptions {
   model: string;
   persona?: string;
   pr?: boolean;
+}
+
+interface IssueData {
+  title: string;
+  body: string;
+  comments?: Array<{ body: string; author: { login: string }; createdAt: string }>;
+}
+
+function fetchIssueContent(repo: string, issueNumber: number): IssueData | null {
+  try {
+    const output = execSync(
+      `gh issue view ${issueNumber} --repo ${repo} --json title,body,comments`,
+      { encoding: "utf-8" }
+    );
+    return JSON.parse(output) as IssueData;
+  }
+  catch (error) {
+    console.error(`Warning: Failed to fetch issue #${issueNumber}: ${error}`);
+    return null;
+  }
 }
 
 export async function run(goal: string, options: RunOptions): Promise<string> {
@@ -73,9 +93,16 @@ export async function run(goal: string, options: RunOptions): Promise<string> {
     mkdirSync(workDir, { recursive: true });
   }
 
+  // Fetch issue content if issue number provided
+  let issueData: IssueData | null = null;
+  if (options.issue && options.repo) {
+    console.log(`Fetching issue #${options.issue}...`);
+    issueData = fetchIssueContent(options.repo, options.issue);
+  }
+
   // Set up isolated HOME
   console.log(`Setting up isolated HOME...`);
-  setupIsolatedHome(id, workDir, goal, !!options.repo, !!options.pr, personaContent);
+  setupIsolatedHome(id, workDir, goal, !!options.repo, !!options.pr, personaContent, issueData);
 
   // Create run metadata
   const runMeta: Run = {
@@ -105,14 +132,14 @@ export async function run(goal: string, options: RunOptions): Promise<string> {
   return id;
 }
 
-function setupIsolatedHome(runId: string, workDir: string, prompt: string, hasRepo: boolean, submitPr: boolean, personaContent?: string): void {
+function setupIsolatedHome(runId: string, workDir: string, prompt: string, hasRepo: boolean, submitPr: boolean, personaContent?: string, issueData?: IssueData | null): void {
   const home = runHome(runId);
 
   // Create .claude directory
   mkdirSync(join(home, ".claude"), { recursive: true });
 
   // Wrap prompt with persona and response instructions
-  const wrappedPrompt = wrapPrompt(prompt, hasRepo, submitPr, personaContent);
+  const wrappedPrompt = wrapPrompt(prompt, hasRepo, submitPr, personaContent, issueData);
 
   // Write AGENTS.md to work directory
   writeFileSync(join(workDir, "AGENTS.md"), wrappedPrompt);
@@ -199,7 +226,7 @@ function copyCredentials(targetHome: string): void {
   }
 }
 
-function wrapPrompt(prompt: string, hasRepo: boolean, submitPr: boolean, personaContent?: string): string {
+function wrapPrompt(prompt: string, hasRepo: boolean, submitPr: boolean, personaContent?: string, issueData?: IssueData | null): string {
   const parts: string[] = [];
 
   // Persona instructions come first (sets the agent's role/constraints)
@@ -211,6 +238,21 @@ function wrapPrompt(prompt: string, hasRepo: boolean, submitPr: boolean, persona
   // Then the task
   parts.push("## Task\n");
   parts.push(prompt);
+
+  // Include issue content if available
+  if (issueData) {
+    parts.push("\n\n## Issue Context\n");
+    parts.push(`### ${issueData.title}\n`);
+    if (issueData.body) {
+      parts.push(`${issueData.body}\n`);
+    }
+    if (issueData.comments && issueData.comments.length > 0) {
+      parts.push("\n### Recent Comments\n");
+      for (const comment of issueData.comments) {
+        parts.push(`**${comment.author.login}** (${comment.createdAt}):\n${comment.body}\n\n`);
+      }
+    }
+  }
 
   // Then git instructions
   if (hasRepo) {
