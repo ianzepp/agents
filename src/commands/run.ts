@@ -6,6 +6,7 @@ import { homedir } from "os";
 import { resolveModel } from "../lib/backend.ts";
 import { ensureBareRepo, createWorktree } from "../lib/git.ts";
 import { ensureDirs, runDir, runHome, runRepo, runLogPath } from "../lib/paths.ts";
+import { loadPersona } from "../lib/persona.ts";
 import { generateRunId, generateBranch, writeRun, type Run } from "../lib/run.ts";
 
 export interface RunOptions {
@@ -13,19 +14,44 @@ export interface RunOptions {
   issue?: number;
   model: string;
   persona?: string;
+  pr?: boolean;
 }
 
 export async function run(goal: string, options: RunOptions): Promise<string> {
   ensureDirs();
 
   const id = generateRunId();
-  const { backend, model } = resolveModel(options.model);
+
+  // Load persona if specified
+  let personaContent: string | undefined;
+  let modelToUse = options.model;
+
+  if (options.persona) {
+    const persona = loadPersona(options.persona);
+    if (!persona) {
+      console.error(`Error: persona '${options.persona}' not found`);
+      process.exit(1);
+    }
+    personaContent = persona.content;
+    // Use persona's model if user didn't specify one explicitly
+    if (persona.model && options.model === "sonnet") {
+      modelToUse = persona.model;
+    }
+  }
+
+  const { backend, model } = resolveModel(modelToUse);
   const branch = options.repo ? generateBranch(options.issue, model, id) : undefined;
 
   console.log(`Creating run ${id}...`);
+  if (options.persona) {
+    console.log(`  Persona: ${options.persona}`);
+  }
   if (options.repo) {
     console.log(`  Repo: ${options.repo}`);
     console.log(`  Branch: ${branch}`);
+    if (options.pr) {
+      console.log(`  PR: enabled`);
+    }
   }
   console.log(`  Model: ${model} (${backend})`);
 
@@ -49,7 +75,7 @@ export async function run(goal: string, options: RunOptions): Promise<string> {
 
   // Set up isolated HOME
   console.log(`Setting up isolated HOME...`);
-  setupIsolatedHome(id, workDir, goal);
+  setupIsolatedHome(id, workDir, goal, !!options.repo, !!options.pr, personaContent);
 
   // Create run metadata
   const runMeta: Run = {
@@ -79,14 +105,14 @@ export async function run(goal: string, options: RunOptions): Promise<string> {
   return id;
 }
 
-function setupIsolatedHome(runId: string, workDir: string, prompt: string): void {
+function setupIsolatedHome(runId: string, workDir: string, prompt: string, hasRepo: boolean, submitPr: boolean, personaContent?: string): void {
   const home = runHome(runId);
 
   // Create .claude directory
   mkdirSync(join(home, ".claude"), { recursive: true });
 
-  // Wrap prompt with response instructions
-  const wrappedPrompt = wrapPrompt(prompt);
+  // Wrap prompt with persona and response instructions
+  const wrappedPrompt = wrapPrompt(prompt, hasRepo, submitPr, personaContent);
 
   // Write AGENTS.md to work directory
   writeFileSync(join(workDir, "AGENTS.md"), wrappedPrompt);
@@ -165,8 +191,36 @@ function copyCredentials(targetHome: string): void {
   }
 }
 
-function wrapPrompt(prompt: string): string {
-  return prompt;
+function wrapPrompt(prompt: string, hasRepo: boolean, submitPr: boolean, personaContent?: string): string {
+  const parts: string[] = [];
+
+  // Persona instructions come first (sets the agent's role/constraints)
+  if (personaContent) {
+    parts.push(personaContent);
+    parts.push("\n---\n");
+  }
+
+  // Then the task
+  parts.push("## Task\n");
+  parts.push(prompt);
+
+  // Then git instructions
+  if (hasRepo) {
+    parts.push(`
+## Git Instructions
+
+When you have completed your work:
+1. Commit your changes with a clear, descriptive message
+2. Push the branch to origin: \`git push -u origin HEAD\``);
+
+    if (submitPr) {
+      parts.push(`3. Create a pull request using \`gh pr create\` with:
+   - A clear title summarizing the change
+   - A description explaining what was done and why`);
+    }
+  }
+
+  return parts.join("\n");
 }
 
 function spawnAgent(runId: string, backend: string, model: string, goal: string, workDir: string): number {

@@ -7,6 +7,7 @@ import { logs } from "./commands/logs.ts";
 import { kill } from "./commands/kill.ts";
 import { clean } from "./commands/clean.ts";
 import { response } from "./commands/response.ts";
+import { list } from "./commands/list.ts";
 import { listModelShortcuts } from "./lib/backend.ts";
 
 const args = process.argv.slice(2);
@@ -23,6 +24,7 @@ Commands:
   response  Show final response (if completed)
   kill      Kill a running agent
   clean     Remove old runs
+  list      List available personas
   models    List model shortcuts
 
 Run Options:
@@ -30,6 +32,7 @@ Run Options:
   -i, --issue <number>      Issue number
   -m, --model <model>       Model shortcut (default: sonnet)
   --persona <name>          Persona name
+  --pr                      Instruct agent to submit a PR
 
 Clean Options:
   --older-than <age>        Remove runs older than (e.g., 7d, 24h)
@@ -46,11 +49,12 @@ Examples:
 `);
 }
 
-async function parseRunArgs(args: string[]): Promise<{ goal: string; options: { repo: string; issue?: number; model: string; persona?: string } }> {
+async function parseRunArgs(args: string[]): Promise<{ goal: string; options: { repo?: string; issue?: number; model: string; persona?: string; pr?: boolean } }> {
   let repo: string | undefined;
   let issue: number | undefined;
   let model = "sonnet";
   let persona: string | undefined;
+  let pr = false;
   const goalParts: string[] = [];
 
   for (let i = 0; i < args.length; i++) {
@@ -67,6 +71,9 @@ async function parseRunArgs(args: string[]): Promise<{ goal: string; options: { 
     }
     else if (arg === "--persona") {
       persona = args[++i];
+    }
+    else if (arg === "--pr") {
+      pr = true;
     }
     else if (!arg.startsWith("-")) {
       goalParts.push(arg);
@@ -87,7 +94,7 @@ async function parseRunArgs(args: string[]): Promise<{ goal: string; options: { 
     process.exit(1);
   }
 
-  return { goal, options: { repo, issue, model, persona } };
+  return { goal, options: { repo, issue, model, persona, pr } };
 }
 
 function parseCleanArgs(args: string[]): { olderThan?: string; all?: boolean } {
@@ -169,6 +176,11 @@ async function main(): Promise<void> {
     case "clean": {
       const options = parseCleanArgs(args.slice(1));
       clean(options);
+      break;
+    }
+
+    case "list": {
+      list();
       break;
     }
 

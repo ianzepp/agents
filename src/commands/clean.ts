@@ -41,14 +41,16 @@ export function clean(options: CleanOptions): void {
       continue;
     }
 
-    console.log(`Cleaning ${id} (${run.repo}, ${status})...`);
+    console.log(`Cleaning ${id} (${run.repo ?? "no repo"}, ${status})...`);
 
-    // Remove worktree from bare repo
-    try {
-      removeWorktree(id, run.repo);
-    }
-    catch {
-      // Worktree may already be removed
+    // Remove worktree from bare repo (if repo was specified)
+    if (run.repo) {
+      try {
+        removeWorktree(id, run.repo);
+      }
+      catch {
+        // Worktree may already be removed
+      }
     }
 
     // Remove run directory

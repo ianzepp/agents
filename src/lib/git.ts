@@ -6,7 +6,7 @@ export function ensureBareRepo(repo: string): string {
   const barePath = bareRepoPath(repo);
 
   if (!existsSync(barePath)) {
-    const url = `https://github.com/${repo}.git`;
+    const url = `git@github.com:${repo}.git`;
     const result = spawnSync("git", ["clone", "--bare", url, barePath], {
       encoding: "utf-8",
       stdio: "inherit",
@@ -51,8 +51,8 @@ export function createWorktree(runId: string, repo: string, branch: string): str
     throw new Error(`Failed to create worktree for ${repo}`);
   }
 
-  // Set up remote for pushing
-  spawnSync("git", ["remote", "add", "origin", `https://github.com/${repo}.git`], {
+  // Set up remote for pushing (SSH for auth)
+  spawnSync("git", ["remote", "add", "origin", `git@github.com:${repo}.git`], {
     cwd: worktreePath,
     encoding: "utf-8",
   });
