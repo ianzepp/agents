@@ -123,16 +123,13 @@ function setupIsolatedHome(runId: string, workDir: string, prompt: string, hasRe
   // Copy credentials from real HOME
   copyCredentials(home);
 
-  // Write settings.json for sandbox mode with bypassed permissions
+  // Write settings.json - sandbox disabled to allow network access (gh, git push)
   writeFileSync(
     join(home, ".claude", "settings.json"),
     JSON.stringify(
       {
-        sandbox: {
-          enabled: true,
-        },
         permissions: {
-          allow: ["Edit", "Write", "Bash", "Read", "Glob", "Grep"],
+          allow: ["Edit", "Write", "Bash", "Read", "Glob", "Grep", "WebFetch"],
           defaultMode: "bypassPermissions",
         },
       },
@@ -172,6 +169,17 @@ function copyCredentials(targetHome: string): void {
     const targetOpencode = join(targetLocal, "opencode");
     if (!existsSync(targetOpencode)) {
       symlinkSync(opencodeDataDir, targetOpencode);
+    }
+  }
+
+  // Symlink gh CLI config (for gh auth)
+  const ghConfigDir = join(realHome, ".config", "gh");
+  if (existsSync(ghConfigDir)) {
+    const targetConfig = join(targetHome, ".config");
+    mkdirSync(targetConfig, { recursive: true });
+    const targetGh = join(targetConfig, "gh");
+    if (!existsSync(targetGh)) {
+      symlinkSync(ghConfigDir, targetGh);
     }
   }
 
