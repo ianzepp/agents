@@ -78,3 +78,12 @@ export function removeWorktree(runId: string, repo: string): void {
     encoding: "utf-8",
   });
 }
+
+export function deleteBranch(branch: string, repo: string): void {
+  const barePath = bareRepoPath(repo);
+
+  spawnSync("git", ["branch", "-D", branch], {
+    cwd: barePath,
+    encoding: "utf-8",
+  });
+}

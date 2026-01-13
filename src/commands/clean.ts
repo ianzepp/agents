@@ -1,11 +1,12 @@
 import { rmSync } from "fs";
 import { getRunIds, runDir } from "../lib/paths.ts";
 import { readRun, getRunStatus, isProcessRunning } from "../lib/run.ts";
-import { removeWorktree } from "../lib/git.ts";
+import { removeWorktree, deleteBranch } from "../lib/git.ts";
 
 export interface CleanOptions {
   olderThan?: string; // e.g., "7d", "24h"
   all?: boolean;
+  branches?: boolean;
 }
 
 export function clean(options: CleanOptions): void {
@@ -50,6 +51,17 @@ export function clean(options: CleanOptions): void {
       }
       catch {
         // Worktree may already be removed
+      }
+
+      // Delete branch if --branches flag is set and branch is tracked
+      if (options.branches && run.branch) {
+        try {
+          deleteBranch(run.branch, run.repo);
+          console.log(`  Deleted branch: ${run.branch}`);
+        }
+        catch {
+          // Branch may already be deleted or merged
+        }
       }
     }
 

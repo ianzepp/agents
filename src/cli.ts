@@ -37,6 +37,7 @@ Run Options:
 Clean Options:
   --older-than <age>        Remove runs older than (e.g., 7d, 24h)
   --all                     Remove all runs
+  --branches                Also delete branches from bare repo
 
 Examples:
   agent run -r owner/repo -i 42 "fix the bug"
@@ -97,9 +98,10 @@ async function parseRunArgs(args: string[]): Promise<{ goal: string; options: { 
   return { goal, options: { repo, issue, model, persona, pr } };
 }
 
-function parseCleanArgs(args: string[]): { olderThan?: string; all?: boolean } {
+function parseCleanArgs(args: string[]): { olderThan?: string; all?: boolean; branches?: boolean } {
   let olderThan: string | undefined;
   let all = false;
+  let branches = false;
 
   for (let i = 0; i < args.length; i++) {
     const arg = args[i];
@@ -110,9 +112,12 @@ function parseCleanArgs(args: string[]): { olderThan?: string; all?: boolean } {
     else if (arg === "--all") {
       all = true;
     }
+    else if (arg === "--branches") {
+      branches = true;
+    }
   }
 
-  return { olderThan, all };
+  return { olderThan, all, branches };
 }
 
 async function main(): Promise<void> {
