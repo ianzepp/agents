@@ -16,6 +16,7 @@ export interface RunOptions {
   persona?: string;
   pr?: boolean;
   timeout?: number; // timeout in minutes
+  skipValidation?: boolean;
 }
 
 interface IssueData {
@@ -120,6 +121,7 @@ export async function run(goal: string, options: RunOptions): Promise<string> {
     pid: 0, // Will be set after spawn
     startedAt: new Date().toISOString(),
     timeout: options.timeout,
+    skipValidation: options.skipValidation,
   };
 
   // Spawn the agent
