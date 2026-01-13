@@ -7,7 +7,6 @@ import { resolveModel } from "../lib/backend.ts";
 import { ensureBareRepo, createWorktree } from "../lib/git.ts";
 import { ensureDirs, runDir, runHome, runRepo, runLogPath } from "../lib/paths.ts";
 import { generateRunId, generateBranch, writeRun, type Run } from "../lib/run.ts";
-import { openSync } from "fs";
 
 export interface RunOptions {
   repo?: string;
@@ -174,25 +173,25 @@ function spawnAgent(runId: string, backend: string, model: string, goal: string,
   const home = runHome(runId);
   const logPath = runLogPath(runId);
 
-  const logFd = openSync(logPath, "w");
-
-  let cmd: string;
-  let args: string[];
+  let agentCmd: string;
+  let agentArgs: string[];
 
   if (backend === "claude") {
-    cmd = "claude";
-    args = ["--model", model, "-p", goal];
+    agentCmd = "claude";
+    agentArgs = ["--model", model, "-p", goal];
   }
   else {
-    cmd = "opencode";
-    args = ["run", "--model", model, `Follow AGENTS.md. Task: ${goal}`];
+    agentCmd = "opencode";
+    agentArgs = ["run", "--model", model, `Follow AGENTS.md. Task: ${goal}`];
   }
 
-  const child = spawn(cmd, args, {
+  // Use script to force pseudo-terminal for unbuffered output
+  // script -q <logfile> <command> runs command with pty, logging to file
+  const child = spawn("script", ["-q", logPath, agentCmd, ...agentArgs], {
     cwd: workDir,
     env: { ...process.env, HOME: home },
     detached: true,
-    stdio: ["ignore", logFd, logFd],
+    stdio: "ignore",
   });
 
   child.unref();

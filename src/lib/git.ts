@@ -34,11 +34,12 @@ export function createWorktree(runId: string, repo: string, branch: string): str
   const barePath = bareRepoPath(repo);
   const worktreePath = runRepo(runId);
 
-  // Create worktree with new branch based on origin/main or origin/master
+  // Create worktree with new branch based on main or master
+  // In bare repos, branches are refs/heads/*, not refs/remotes/origin/*
   const defaultBranch = getDefaultBranch(barePath);
   const result = spawnSync(
     "git",
-    ["worktree", "add", "-b", branch, worktreePath, `origin/${defaultBranch}`],
+    ["worktree", "add", "-b", branch, worktreePath, defaultBranch],
     {
       cwd: barePath,
       encoding: "utf-8",
@@ -50,8 +51,8 @@ export function createWorktree(runId: string, repo: string, branch: string): str
     throw new Error(`Failed to create worktree for ${repo}`);
   }
 
-  // Set up remote tracking
-  spawnSync("git", ["remote", "set-url", "origin", `https://github.com/${repo}.git`], {
+  // Set up remote for pushing
+  spawnSync("git", ["remote", "add", "origin", `https://github.com/${repo}.git`], {
     cwd: worktreePath,
     encoding: "utf-8",
   });
