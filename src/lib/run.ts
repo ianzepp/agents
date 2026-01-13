@@ -1,6 +1,7 @@
 import { readFileSync, writeFileSync, existsSync, statSync } from "fs";
 import { join } from "path";
-import { runMetaPath, runDir, runLogPath } from "./paths.ts";
+import { runMetaPath, runDir, runLogPath, runRepo } from "./paths.ts";
+import { detectProjectType, runValidation, type ValidationResult } from "./validate.ts";
 
 export type RunStatus = "running" | "completed" | "failed";
 
@@ -17,6 +18,8 @@ export interface Run {
   completedAt?: string;
   error?: string;
   timeout?: number; // timeout in minutes
+  skipValidation?: boolean;
+  validation?: ValidationResult;
   usage?: {
     input_tokens?: number;
     output_tokens?: number;
@@ -56,12 +59,7 @@ export function getRunStatus(run: Run): RunStatus {
   const responsePath = join(runDir(run.id), "response.md");
   let newStatus: RunStatus | null = null;
 
-  // Check if response.md exists (successful completion)
-  if (existsSync(responsePath)) {
-    newStatus = "completed";
-  }
-
-  // Check if timeout exceeded
+  // Check if timeout exceeded (before checking response)
   if (run.timeout) {
     const elapsed = Date.now() - new Date(run.startedAt).getTime();
     const timeoutMs = run.timeout * 60 * 1000;
@@ -81,6 +79,31 @@ export function getRunStatus(run: Run): RunStatus {
       writeRun(run);
       return "failed";
     }
+  }
+
+  // Check if response.md exists (agent declared completion)
+  if (existsSync(responsePath)) {
+    // Run validation before marking as completed (unless skipped)
+    if (!run.skipValidation && run.repo && !run.validation) {
+      const workDir = runRepo(run.id);
+      const projectType = detectProjectType(workDir);
+
+      if (projectType) {
+        const validation = runValidation(workDir, projectType);
+        run.validation = validation;
+        writeRun(run);
+
+        if (!validation.success) {
+          run.status = "failed";
+          run.error = `Validation failed: ${validation.error || "unknown error"}`;
+          run.completedAt = new Date().toISOString();
+          writeRun(run);
+          return "failed";
+        }
+      }
+    }
+
+    newStatus = "completed";
   }
 
   // Check if process is still alive
@@ -112,7 +135,8 @@ export function getRunStatus(run: Run): RunStatus {
           }
           // Fall back to raw output if not JSON
           writeFileSync(responsePath, output);
-          newStatus = "completed";
+          // Validation will happen on next status check (via recursion)
+          return getRunStatus(run);
         }
       }
     }
