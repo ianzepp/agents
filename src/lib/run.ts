@@ -16,6 +16,7 @@ export interface Run {
   startedAt: string;
   completedAt?: string;
   error?: string;
+  timeout?: number; // timeout in minutes
   usage?: {
     input_tokens?: number;
     output_tokens?: number;
@@ -59,6 +60,29 @@ export function getRunStatus(run: Run): RunStatus {
   if (existsSync(responsePath)) {
     newStatus = "completed";
   }
+
+  // Check if timeout exceeded
+  if (run.timeout) {
+    const elapsed = Date.now() - new Date(run.startedAt).getTime();
+    const timeoutMs = run.timeout * 60 * 1000;
+    if (elapsed > timeoutMs) {
+      // Kill the process if still running
+      if (run.pid && isProcessRunning(run.pid)) {
+        try {
+          process.kill(run.pid, "SIGTERM");
+        }
+        catch {
+          // Ignore kill errors
+        }
+      }
+      run.status = "failed";
+      run.completedAt = new Date().toISOString();
+      run.error = "Timeout exceeded";
+      writeRun(run);
+      return "failed";
+    }
+  }
+
   // Check if process is still alive
   else if (run.pid && !isProcessRunning(run.pid)) {
     // Process exited - check if there's output to promote to response

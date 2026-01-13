@@ -9,6 +9,7 @@ interface RunInfo {
   status: RunStatus;
   elapsed: string;
   error?: string;
+  timeout?: number;
 }
 
 const STATUS_COLORS: Record<RunStatus, string> = {
@@ -33,7 +34,7 @@ export function ps(): void {
     if (!run) continue;
 
     const status = getRunStatus(run);
-    const elapsed = formatElapsed(run.startedAt, run.completedAt);
+    const elapsed = formatElapsed(run.startedAt, run.completedAt, run.timeout);
 
     runs.push({
       id,
@@ -43,6 +44,7 @@ export function ps(): void {
       status,
       elapsed,
       error: run.error,
+      timeout: run.timeout,
     });
   }
 
@@ -72,14 +74,28 @@ export function ps(): void {
   }
 }
 
-function formatElapsed(startedAt: string, completedAt?: string): string {
+function formatElapsed(startedAt: string, completedAt?: string, timeout?: number): string {
   const start = new Date(startedAt).getTime();
   const end = completedAt ? new Date(completedAt).getTime() : Date.now();
   const seconds = Math.floor((end - start) / 1000);
 
-  if (seconds < 60) return `${seconds}s`;
-  const minutes = Math.floor(seconds / 60);
-  if (minutes < 60) return `${minutes}m`;
-  const hours = Math.floor(minutes / 60);
-  return `${hours}h ${minutes % 60}m`;
+  let elapsed: string;
+  if (seconds < 60) {
+    elapsed = `${seconds}s`;
+  }
+  else {
+    const minutes = Math.floor(seconds / 60);
+    if (minutes < 60) {
+      elapsed = `${minutes}m`;
+    }
+    else {
+      const hours = Math.floor(minutes / 60);
+      elapsed = `${hours}h ${minutes % 60}m`;
+    }
+  }
+
+  if (timeout) {
+    return `${elapsed} / ${timeout}m`;
+  }
+  return elapsed;
 }

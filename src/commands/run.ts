@@ -15,6 +15,7 @@ export interface RunOptions {
   model: string;
   persona?: string;
   pr?: boolean;
+  timeout?: number; // timeout in minutes
 }
 
 interface IssueData {
@@ -73,6 +74,9 @@ export async function run(goal: string, options: RunOptions): Promise<string> {
       console.log(`  PR: enabled`);
     }
   }
+  if (options.timeout) {
+    console.log(`  Timeout: ${options.timeout}m`);
+  }
   console.log(`  Model: ${model} (${backend})`);
 
   let workDir: string;
@@ -115,6 +119,7 @@ export async function run(goal: string, options: RunOptions): Promise<string> {
     status: "running",
     pid: 0, // Will be set after spawn
     startedAt: new Date().toISOString(),
+    timeout: options.timeout,
   };
 
   // Spawn the agent
