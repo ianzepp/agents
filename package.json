@@ -1,0 +1,19 @@
+{
+  "name": "agents",
+  "version": "0.1.0",
+  "type": "module",
+  "bin": {
+    "agent": "./bin/agent"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "build": "bun build src/cli.ts --outfile bin/agent --target bun",
+    "lint": "eslint src/",
+    "lint:fix": "eslint src/ --fix",
+    "check": "bun run typecheck && bun run lint"
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "typescript": "^5.0.0"
+  }
+}
