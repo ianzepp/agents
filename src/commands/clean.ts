@@ -27,12 +27,10 @@ export function clean(options: CleanOptions): void {
 
     const status = getRunStatus(run);
 
-    // Don't clean running processes unless --all
-    if (status === "running" && !options.all) {
-      if (run.pid && isProcessRunning(run.pid)) {
-        console.log(`Skipping ${id}: still running`);
-        continue;
-      }
+    // Never clean actually running processes
+    if (status === "running" && run.pid && isProcessRunning(run.pid)) {
+      console.log(`Skipping ${id}: still running (PID ${run.pid})`);
+      continue;
     }
 
     const startTime = new Date(run.startedAt).getTime();
