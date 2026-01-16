@@ -1,0 +1,27 @@
+# Models Module - model shortcuts
+#
+# Commands: models list
+
+@ descriptio "Model shortcuts"
+incipit {}
+
+# ─────────────────────────────────────────────────────────────────────────────
+# list - show available model shortcuts
+# ─────────────────────────────────────────────────────────────────────────────
+
+@ imperium "list"
+@ alias "ls"
+@ descriptio "List model shortcuts"
+functio list() -> vacuum {
+    scribe "Model shortcuts:\n"
+    scribe "  SHORTCUT      MODEL                                     BACKEND"
+    scribe "  ──────────    ────────────────────────────────────────  ───────"
+    scribe "  sonnet        claude-sonnet-4-5                         claude"
+    scribe "  opus          claude-opus-4-5                           claude"
+    scribe "  haiku         claude-haiku-4-5                          claude"
+    scribe "  qwen3         opencode/qwen3-coder                      opencode"
+    scribe "  deepseek      openrouter/deepseek/deepseek-chat-v3.1    opencode"
+    scribe "  gpt4mini      openrouter/openai/gpt-4o-mini             opencode"
+    scribe ""
+    scribe "Use full model name for unlisted models (e.g., openrouter/anthropic/claude-3)"
+}

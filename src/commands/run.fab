@@ -1,0 +1,390 @@
+# Run Command - spawn a new agent job
+#
+# This is the main command that:
+# 1. Creates isolated HOME directory
+# 2. Sets up git worktree (if repo specified)
+# 3. Installs dependencies
+# 4. Assembles prompt with persona
+# 5. Spawns agent process
+
+ex "../norma/hal/aleator" importa aleator
+ex "../norma/hal/json" importa json
+ex "../norma/hal/processus" importa processus
+ex "../norma/hal/solum" importa solum
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Paths
+# ─────────────────────────────────────────────────────────────────────────────
+
+fixum AGENTS_ROOT = solum.iunge([solum.domus(), ".agents"])
+fixum RUNS_DIR = solum.iunge([AGENTS_ROOT, "runs"])
+fixum REPOS_DIR = solum.iunge([AGENTS_ROOT, "repos"])
+fixum PERSONAS_DIR = solum.iunge([AGENTS_ROOT, "personas"])
+
+functio jobDir(textus id) -> textus {
+    redde solum.iunge([RUNS_DIR, id])
+}
+
+functio jobHome(textus id) -> textus {
+    redde solum.iunge([RUNS_DIR, id, "home"])
+}
+
+functio jobRepo(textus id) -> textus {
+    redde solum.iunge([RUNS_DIR, id, "repo"])
+}
+
+functio jobLogPath(textus id) -> textus {
+    redde solum.iunge([RUNS_DIR, id, "output.log"])
+}
+
+functio jobMetaPath(textus id) -> textus {
+    redde solum.iunge([RUNS_DIR, id, "run.json"])
+}
+
+functio bareRepoPath(textus repo) -> textus {
+    # owner/repo -> owner-repo.git
+    redde solum.iunge([REPOS_DIR, repo.replace("/", "-") + ".git"])
+}
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Model resolution
+# ─────────────────────────────────────────────────────────────────────────────
+
+fixum MODEL_SHORTCUTS = {
+    "sonnet": "claude-sonnet-4-5",
+    "opus": "claude-opus-4-5",
+    "haiku": "claude-haiku-4-5",
+    "qwen3": "opencode/qwen3-coder",
+    "deepseek": "openrouter/deepseek/deepseek-chat-v3.1",
+    "gpt4mini": "openrouter/openai/gpt-4o-mini"
+}
+
+functio generateId() -> textus {
+    redde aleator.uuid().slice(0, 8)
+}
+
+functio translateModel(textus shortcut) -> textus {
+    si shortcut.includes("/") ergo redde shortcut
+    redde MODEL_SHORTCUTS[shortcut] vel shortcut
+}
+
+functio detectBackend(textus model) -> textus {
+    redde model.includes("/") sic "opencode" secus "claude"
+}
+
+functio generateBranch(textus model, textus id, si numerus issue) -> textus {
+    fixum issueStr = issue sic scriptum("issue-§", issue) secus "task"
+    fixum modelShort = model.split("/").pop().split("-")[0]
+    redde scriptum("§-§-§", issueStr, modelShort, id)
+}
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Git operations
+# ─────────────────────────────────────────────────────────────────────────────
+
+functio ensureBareRepo(textus repo) -> vacuum {
+    fixum barePath = bareRepoPath(repo)
+
+    si non solum.exstat(barePath) {
+        fixum url = scriptum("git@github.com:§.git", repo)
+        scribe scriptum("Cloning §...", repo)
+        processus.exsequi(scriptum("git clone --bare § §", url, barePath))
+    }
+    secus {
+        scribe "Fetching latest..."
+        processus.exsequi(scriptum("cd § && git fetch --all", barePath))
+    }
+}
+
+functio getDefaultBranch(textus barePath) -> textus {
+    fixum result = processus.exsequiCodem(scriptum("cd § && git show-ref --verify --quiet refs/heads/main", barePath))
+    redde result == 0 sic "main" secus "master"
+}
+
+functio createWorktree(textus id, textus repo, textus branch) -> vacuum {
+    fixum barePath = bareRepoPath(repo)
+    fixum worktreePath = jobRepo(id)
+    fixum defaultBranch = getDefaultBranch(barePath)
+
+    scribe scriptum("Creating worktree (branch: §)...", branch)
+    processus.exsequi(scriptum("cd § && git worktree add -b § § §", barePath, branch, worktreePath, defaultBranch))
+
+    # Set up remote for pushing
+    processus.exsequi(scriptum("cd § && git remote add origin git@github.com:§.git", worktreePath, repo))
+}
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Credential copying
+# ─────────────────────────────────────────────────────────────────────────────
+
+@ futura
+functio copyCredentials(textus targetHome) -> vacuum {
+    fixum realHome = solum.domus()
+
+    # Copy .gitconfig if exists
+    fixum gitconfig = solum.iunge([realHome, ".gitconfig"])
+    si solum.exstat(gitconfig) {
+        cede solum.copia(gitconfig, solum.iunge([targetHome, ".gitconfig"]))
+    }
+
+    # Copy .ssh directory (for git auth)
+    fixum sshDir = solum.iunge([realHome, ".ssh"])
+    fixum targetSsh = solum.iunge([targetHome, ".ssh"])
+    si solum.exstat(sshDir) {
+        cede solum.creaDir(targetSsh)
+        ex ["id_rsa", "id_ed25519", "config", "known_hosts"] pro file {
+            fixum src = solum.iunge([sshDir, file])
+            si solum.exstat(src) {
+                cede solum.copia(src, solum.iunge([targetSsh, file]))
+            }
+        }
+    }
+
+    # Symlink gh CLI config (for gh auth)
+    fixum ghConfigDir = solum.iunge([realHome, ".config", "gh"])
+    si solum.exstat(ghConfigDir) {
+        fixum targetConfig = solum.iunge([targetHome, ".config"])
+        cede solum.creaDir(targetConfig)
+        fixum targetGh = solum.iunge([targetConfig, "gh"])
+        si non solum.exstat(targetGh) {
+            processus.exsequi(scriptum("ln -s § §", ghConfigDir, targetGh))
+        }
+    }
+
+    # Symlink opencode config if exists
+    fixum opencodeDir = solum.iunge([realHome, ".local", "share", "opencode"])
+    si solum.exstat(opencodeDir) {
+        fixum targetLocal = solum.iunge([targetHome, ".local", "share"])
+        cede solum.creaDir(targetLocal)
+        fixum targetOpencode = solum.iunge([targetLocal, "opencode"])
+        si non solum.exstat(targetOpencode) {
+            processus.exsequi(scriptum("ln -s § §", opencodeDir, targetOpencode))
+        }
+    }
+
+    # Create .zshenv with tokens from environment
+    varia lista<textus> tokens = [] innatum lista<textus>
+    fixum ghToken = processus.env("GH_TOKEN")
+    si ghToken {
+        tokens.push(scriptum("export GH_TOKEN=\"§\"", ghToken))
+    }
+    fixum githubToken = processus.env("GITHUB_TOKEN")
+    si githubToken {
+        tokens.push(scriptum("export GITHUB_TOKEN=\"§\"", githubToken))
+    }
+    fixum claudeToken = processus.env("CLAUDE_CODE_OAUTH_TOKEN")
+    si claudeToken {
+        tokens.push(scriptum("export CLAUDE_CODE_OAUTH_TOKEN=\"§\"", claudeToken))
+    }
+    si tokens.length > 0 {
+        cede solum.scribe(solum.iunge([targetHome, ".zshenv"]), tokens.join("\n") + "\n")
+    }
+}
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Prompt assembly
+# ─────────────────────────────────────────────────────────────────────────────
+
+functio wrapPrompt(textus goal, bivalens hasRepo, bivalens submitPr, si textus personaContent) -> textus {
+    varia lista<textus> parts = [] innatum lista<textus>
+
+    # Persona instructions first
+    si personaContent {
+        parts.push(personaContent)
+        parts.push("\n---\n")
+    }
+
+    # Task
+    parts.push("## Task\n")
+    parts.push(goal)
+
+    # Git instructions
+    si hasRepo {
+        parts.push("\n\n## Git Instructions\n")
+        parts.push("When you have completed your work:")
+        parts.push("1. Commit your changes with a clear, descriptive message")
+        parts.push("2. Push the branch to origin: `git push -u origin HEAD`")
+
+        si submitPr {
+            parts.push("3. Create a pull request using `gh pr create` with:")
+            parts.push("   - A clear title summarizing the change")
+            parts.push("   - A description explaining what was done and why")
+        }
+    }
+
+    redde parts.join("\n")
+}
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Isolated HOME setup
+# ─────────────────────────────────────────────────────────────────────────────
+
+@ futura
+functio setupIsolatedHome(textus id, textus workDir, textus goal, bivalens hasRepo, bivalens submitPr, si textus personaContent) -> vacuum {
+    fixum home = jobHome(id)
+
+    # Create .claude directory
+    cede solum.creaDir(solum.iunge([home, ".claude"]))
+
+    # Wrap prompt and write AGENTS.md to work directory
+    fixum wrappedPrompt = wrapPrompt(goal, hasRepo, submitPr, personaContent)
+    cede solum.scribe(solum.iunge([workDir, "AGENTS.md"]), wrappedPrompt)
+
+    # Symlink .claude/CLAUDE.md -> workDir/AGENTS.md
+    fixum agentsPath = solum.iunge([workDir, "AGENTS.md"])
+    fixum claudeMdPath = solum.iunge([home, ".claude", "CLAUDE.md"])
+    processus.exsequi(scriptum("ln -s § §", agentsPath, claudeMdPath))
+
+    # Copy credentials
+    cede copyCredentials(home)
+
+    # Write settings.json
+    fixum settings = {
+        "permissions": {
+            "allow": ["Edit", "Write", "Bash", "Read", "Glob", "Grep", "WebFetch"],
+            "defaultMode": "bypassPermissions"
+        }
+    }
+    cede solum.scribe(solum.iunge([home, ".claude", "settings.json"]), json.solvePulchre(settings, 2))
+}
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Agent spawning
+# ─────────────────────────────────────────────────────────────────────────────
+
+@ futura
+functio spawnAgent(textus id, textus backend, textus model, textus goal, textus workDir) -> numerus {
+    fixum home = jobHome(id)
+    fixum logPath = jobLogPath(id)
+    fixum pidFile = solum.iunge([jobDir(id), "pid"])
+
+    varia textus cmd = ""
+    si backend == "claude" {
+        cmd = scriptum("claude --model § -p \"§\"", model, goal.replace("\"", "\\\""))
+    }
+    secus {
+        cmd = scriptum("opencode run --model § \"Follow AGENTS.md. Task: §\"", model, goal.replace("\"", "\\\""))
+    }
+
+    # Spawn detached with custom HOME using script for pty
+    # Write PID to file since capturing from background process is tricky
+    fixum spawnCmd = scriptum("cd § && HOME=§ nohup script -q § § > /dev/null 2>&1 & echo $! > §", workDir, home, logPath, cmd, pidFile)
+    processus.exsequi(spawnCmd)
+
+    # Small delay to let PID file be written
+    processus.exsequi("sleep 0.1")
+
+    # Read PID from file
+    si solum.exstat(pidFile) {
+        fixum pidStr = cede solum.lege(pidFile)
+        redde pidStr.trim() numeratum
+    }
+
+    redde 0
+}
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Main run command
+# ─────────────────────────────────────────────────────────────────────────────
+
+@ publica
+@ futura
+functio runCommand(
+    textus goal,
+    si textus repo,
+    si numerus issue,
+    si textus model,
+    si textus persona,
+    si bivalens pr,
+    si numerus timeout,
+    si bivalens noValidate
+) -> vacuum {
+    fixum id = generateId()
+    fixum resolvedModel = translateModel(model vel "sonnet")
+    fixum backend = detectBackend(resolvedModel)
+    fixum branch = repo sic generateBranch(resolvedModel, id, issue) secus nihil
+
+    scribe scriptum("Creating job §...", id)
+    si persona {
+        scribe scriptum("  Persona: §", persona)
+    }
+    si repo {
+        scribe scriptum("  Repo: §", repo)
+        scribe scriptum("  Branch: §", branch)
+        si pr {
+            scribe "  PR: enabled"
+        }
+    }
+    si timeout {
+        scribe scriptum("  Timeout: §m", timeout)
+    }
+    scribe scriptum("  Model: § (§)", resolvedModel, backend)
+
+    # Ensure directories exist
+    cede solum.creaDir(RUNS_DIR)
+    cede solum.creaDir(REPOS_DIR)
+
+    varia textus workDir = ""
+
+    si repo {
+        # Set up bare repo and worktree
+        ensureBareRepo(repo)
+        createWorktree(id, repo, branch)
+        workDir = jobRepo(id)
+
+        # Install dependencies if package.json exists
+        si solum.exstat(solum.iunge([workDir, "package.json"])) {
+            scribe "Installing dependencies..."
+            processus.exsequi(scriptum("cd § && bun install", workDir))
+        }
+    }
+    secus {
+        # No repo - just use job directory
+        workDir = jobDir(id)
+        cede solum.creaDir(workDir)
+    }
+
+    # Load persona content if specified
+    varia textus personaContent = ""
+    si persona {
+        fixum personaPath = solum.iunge([PERSONAS_DIR, scriptum("§.md", persona)])
+        si solum.exstat(personaPath) {
+            personaContent = cede solum.lege(personaPath)
+        }
+        secus {
+            mone scriptum("Warning: persona '§' not found", persona)
+        }
+    }
+
+    # Set up isolated HOME
+    scribe "Setting up isolated HOME..."
+    cede setupIsolatedHome(id, workDir, goal, repo != nihil, pr vel falsum, personaContent)
+
+    # Spawn the agent
+    scribe scriptum("Spawning §...", backend)
+    fixum pid = cede spawnAgent(id, backend, resolvedModel, goal, workDir)
+
+    # Write run metadata
+    fixum now = novum Date()
+    fixum startedAt = now.toISOString()
+    fixum runMeta = {
+        "id": id,
+        "repo": repo,
+        "issue": issue,
+        "persona": persona,
+        "model": resolvedModel,
+        "branch": branch,
+        "status": "running",
+        "pid": pid,
+        "startedAt": startedAt,
+        "timeout": timeout,
+        "skipValidation": noValidate
+    }
+    cede solum.scribe(jobMetaPath(id), json.solvePulchre(runMeta, 2))
+
+    scribe ""
+    scribe scriptum("Job § started (PID §)", id, pid)
+    scribe scriptum("  Watch:    agent jobs watch §", id)
+    scribe scriptum("  Logs:     agent jobs logs §", id)
+    scribe scriptum("  Response: agent jobs response §", id)
+}

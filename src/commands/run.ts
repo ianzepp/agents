@@ -91,6 +91,12 @@ export async function run(goal: string, options: RunOptions): Promise<string> {
     console.log(`Creating worktree...`);
     createWorktree(id, options.repo, branch!);
     workDir = runRepo(id);
+
+    // Install dependencies if package.json exists
+    if (existsSync(join(workDir, "package.json"))) {
+      console.log(`Installing dependencies...`);
+      execSync("bun install", { cwd: workDir, stdio: "inherit" });
+    }
   }
   else {
     // No repo - just use a simple work directory

@@ -1,0 +1,73 @@
+# Personas Module - manage agent personas
+#
+# Commands: personas list|show
+
+ex "../norma/hal/solum" importa solum
+
+# Paths
+fixum AGENTS_ROOT = solum.iunge([solum.domus(), ".agents"])
+fixum PERSONAS_DIR = solum.iunge([AGENTS_ROOT, "personas"])
+
+@ descriptio "Manage agent personas"
+incipit {}
+
+# ─────────────────────────────────────────────────────────────────────────────
+# list - show all available personas
+# ─────────────────────────────────────────────────────────────────────────────
+
+@ imperium "list"
+@ alias "ls"
+@ descriptio "List available personas"
+@ futura
+functio list() -> vacuum {
+    si non solum.exstat(PERSONAS_DIR) {
+        scribe "No personas directory found."
+        scribe scriptum("Create personas in §", PERSONAS_DIR)
+        redde
+    }
+
+    fixum files = cede solum.elenca(PERSONAS_DIR)
+    fixum mdFiles = files.filter(pro f: f.endsWith(".md"))
+
+    si mdFiles.length == 0 {
+        scribe "No personas found."
+        redde
+    }
+
+    scribe "Available personas:\n"
+
+    ex mdFiles pro file {
+        fixum name = file.replace(".md", "")
+        fixum path = solum.iunge([PERSONAS_DIR, file])
+        fixum content = cede solum.lege(path)
+
+        # Extract description from frontmatter
+        fixum descMatch = content.match(sed "^description:\\s*(.+)$" m)
+        fixum desc = descMatch sic descMatch[1] secus "(no description)"
+
+        # Extract model from frontmatter
+        fixum modelMatch = content.match(sed "^model:\\s*(.+)$" m)
+        fixum model = modelMatch sic modelMatch[1] secus "-"
+
+        scribe scriptum("  §\t§\t(§)", name, desc, model)
+    }
+}
+
+# ─────────────────────────────────────────────────────────────────────────────
+# show - display persona details
+# ─────────────────────────────────────────────────────────────────────────────
+
+@ imperium "show"
+@ descriptio "Show persona details"
+@ futura
+functio show(textus name) -> vacuum {
+    fixum path = solum.iunge([PERSONAS_DIR, scriptum("§.md", name)])
+
+    si non solum.exstat(path) {
+        mone scriptum("Persona '§' not found", name)
+        redde
+    }
+
+    fixum content = cede solum.lege(path)
+    scribe content
+}

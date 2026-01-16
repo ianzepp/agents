@@ -121,6 +121,34 @@ Personas are pre-configured agent personalities stored in `~/.agents/personas/`.
     └── *.md
 ```
 
+### Isolated HOME Structure
+
+Each run gets its own HOME directory to isolate the agent's environment:
+
+```
+home/
+├── .gitconfig                      # Copied from real ~/.gitconfig
+├── .zshenv                         # Generated with GH_TOKEN, GITHUB_TOKEN, etc.
+├── .ssh/
+│   ├── config                      # Copied from real ~/.ssh/
+│   ├── known_hosts
+│   └── id_*                        # SSH keys for git auth
+├── .config/
+│   └── gh -> ~/.config/gh          # Symlink to real gh CLI auth
+├── .local/
+│   └── share/
+│       └── opencode -> ~/.local/share/opencode  # Symlink (if exists)
+└── .claude/
+    ├── CLAUDE.md -> ../AGENTS.md   # Symlink to run's assembled prompt
+    ├── settings.json               # Generated (permissions: bypassPermissions)
+    ├── debug/                      # Created by Claude at runtime
+    ├── projects/                   # Session data
+    ├── statsig/                    # Feature flags
+    └── todos/                      # Task tracking
+```
+
+Credentials are copied/symlinked so agents can push to git and create PRs, but all Claude state (`.claude.json`, projects, debug logs) stays isolated per-run.
+
 ## How It Works
 
 1. **Run creation** - Generates unique ID, creates isolated HOME directory

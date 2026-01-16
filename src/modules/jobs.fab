@@ -1,0 +1,179 @@
+# Jobs Module - manage agent jobs
+#
+# Commands: jobs list|watch|logs|response|kill|clean
+
+ex "../norma/hal/solum" importa solum
+ex "../norma/hal/json" importa json
+ex "../norma/hal/processus" importa processus
+
+# Paths
+fixum AGENTS_ROOT = solum.iunge([solum.domus(), ".agents"])
+fixum RUNS_DIR = solum.iunge([AGENTS_ROOT, "runs"])
+
+@ futura
+functio getJobIds() -> lista<textus> {
+    si non solum.exstat(RUNS_DIR) {
+        redde [] innatum lista<textus>
+    }
+    redde cede solum.elenca(RUNS_DIR)
+}
+
+functio jobDir(textus id) -> textus {
+    redde solum.iunge([RUNS_DIR, id])
+}
+
+functio jobMetaPath(textus id) -> textus {
+    redde solum.iunge([RUNS_DIR, id, "run.json"])
+}
+
+functio jobLogPath(textus id) -> textus {
+    redde solum.iunge([RUNS_DIR, id, "output.log"])
+}
+
+functio jobResponsePath(textus id) -> textus {
+    redde solum.iunge([RUNS_DIR, id, "response.md"])
+}
+
+@ descriptio "Manage agent jobs"
+incipit {}
+
+# ─────────────────────────────────────────────────────────────────────────────
+# list - show all jobs with status
+# ─────────────────────────────────────────────────────────────────────────────
+
+@ imperium "list"
+@ alias "ls"
+@ descriptio "List all jobs with status"
+@ futura
+functio list() -> vacuum {
+    fixum ids = cede getJobIds()
+
+    si ids.length == 0 {
+        scribe "No jobs found."
+        redde
+    }
+
+    scribe "ID         REPO                           ISSUE   MODEL             STATUS"
+
+    ex ids pro id {
+        fixum metaPath = jobMetaPath(id)
+        si non solum.exstat(metaPath) ergo perge
+
+        fixum content = cede solum.lege(metaPath)
+        fixum job = json.pange(content)
+
+        fixum repo = job.repo vel "(no repo)"
+        fixum issue = job.issue sic scriptum("#§", job.issue) secus "-"
+        fixum model = job.model vel "unknown"
+        fixum status = job.status vel "unknown"
+
+        scribe scriptum("§  §  §  §  §", id, repo, issue, model, status)
+    }
+}
+
+# ─────────────────────────────────────────────────────────────────────────────
+# watch - follow job output in real-time
+# ─────────────────────────────────────────────────────────────────────────────
+
+@ imperium "watch"
+@ descriptio "Follow job output in real-time"
+@ futura
+functio watch(textus id) -> vacuum {
+    fixum logPath = jobLogPath(id)
+
+    si non solum.exstat(logPath) {
+        mone scriptum("Job § not found or has no output", id)
+        redde
+    }
+
+    # TODO: implement tail -f behavior
+    scribe scriptum("TODO: watch §", id)
+}
+
+# ─────────────────────────────────────────────────────────────────────────────
+# logs - show full job log
+# ─────────────────────────────────────────────────────────────────────────────
+
+@ imperium "logs"
+@ descriptio "Show full job log"
+@ futura
+functio logs(textus id) -> vacuum {
+    fixum logPath = jobLogPath(id)
+
+    si non solum.exstat(logPath) {
+        mone scriptum("Job § not found or has no output", id)
+        redde
+    }
+
+    fixum content = cede solum.lege(logPath)
+    scribe content
+}
+
+# ─────────────────────────────────────────────────────────────────────────────
+# response - show final response
+# ─────────────────────────────────────────────────────────────────────────────
+
+@ imperium "response"
+@ descriptio "Show final response (if completed)"
+@ futura
+functio response(textus id) -> vacuum {
+    fixum responsePath = jobResponsePath(id)
+
+    si non solum.exstat(responsePath) {
+        mone scriptum("Job § has no response yet", id)
+        redde
+    }
+
+    fixum content = cede solum.lege(responsePath)
+    scribe content
+}
+
+# ─────────────────────────────────────────────────────────────────────────────
+# kill - stop a running job
+# ─────────────────────────────────────────────────────────────────────────────
+
+@ imperium "kill"
+@ descriptio "Stop a running job"
+@ futura
+functio kill(textus id) -> vacuum {
+    fixum metaPath = jobMetaPath(id)
+
+    si non solum.exstat(metaPath) {
+        mone scriptum("Job § not found", id)
+        redde
+    }
+
+    fixum content = cede solum.lege(metaPath)
+    fixum job = json.pange(content)
+
+    si job.status != "running" {
+        mone scriptum("Job § is not running (status: §)", id, job.status)
+        redde
+    }
+
+    # TODO: send SIGTERM to job.pid
+    scribe scriptum("TODO: kill PID §", job.pid)
+}
+
+# ─────────────────────────────────────────────────────────────────────────────
+# clean - remove old jobs
+# ─────────────────────────────────────────────────────────────────────────────
+
+@ imperium "clean"
+@ descriptio "Remove old jobs"
+@ futura
+functio clean(si bivalens all, si textus olderThan) -> vacuum {
+    si all {
+        # TODO: remove all job directories
+        scribe "TODO: clean all jobs"
+        redde
+    }
+
+    si olderThan {
+        # TODO: parse age string, remove matching jobs
+        scribe scriptum("TODO: clean jobs older than §", olderThan)
+        redde
+    }
+
+    mone "Specify --all or --older-than <age>"
+}
