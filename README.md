@@ -2,6 +2,8 @@
 
 CLI for spawning isolated AI agent runs against GitHub repositories.
 
+Written in [faber](https://github.com/ianzepp/faber), a Latin-themed programming language that compiles to TypeScript.
+
 ## Features
 
 - **Isolated execution** - Each agent runs in its own HOME directory with copied credentials
@@ -36,31 +38,32 @@ agent run -r owner/repo -i 42 --persona opifex --pr "Fix issue #42"
 agent run "What are the best practices for error handling in TypeScript?"
 
 # Monitor runs
-agent ps
-agent watch <run-id>
-agent logs <run-id>
+agent jobs list
+agent jobs watch <id>
+agent jobs logs <id>
 
 # Get results
-agent response <run-id>
+agent jobs response <id>
 
 # Cleanup
-agent clean --all
-agent clean --older-than 7d
+agent jobs clean --all
+agent jobs clean --older-than 7d
 ```
 
 ## Commands
 
-| Command | Description |
-|---------|-------------|
-| `run` | Spawn a new agent run |
-| `ps` | List all runs with status |
-| `watch` | Follow run output in real-time |
-| `logs` | Show full run log |
-| `response` | Show final response (if completed) |
-| `kill` | Kill a running agent |
-| `clean` | Remove old runs |
-| `list` | List available personas |
-| `models` | List model shortcuts |
+```
+agent run <goal>              Spawn a new agent job
+agent jobs list               List all jobs with status
+agent jobs watch <id>         Follow job output in real-time
+agent jobs logs <id>          Show full job log
+agent jobs response <id>      Show final response (if completed)
+agent jobs kill <id>          Stop a running job
+agent jobs clean              Remove old jobs
+agent personas list           List available personas
+agent personas show <name>    Show persona details
+agent models list             List model shortcuts
+```
 
 ## Run Options
 
@@ -70,6 +73,8 @@ agent clean --older-than 7d
 -m, --model <model>       Model shortcut or full name (default: sonnet)
 --persona <name>          Load persona instructions
 --pr                      Instruct agent to create a PR
+--timeout <minutes>       Timeout in minutes
+--no-validate             Skip validation step
 ```
 
 ## Model Shortcuts
@@ -81,6 +86,7 @@ agent clean --older-than 7d
 | `haiku` | claude-haiku-4-5 | claude |
 | `qwen3` | opencode/qwen3-coder | opencode |
 | `deepseek` | openrouter/deepseek/deepseek-chat-v3.1 | opencode |
+| `gpt4mini` | openrouter/openai/gpt-4o-mini | opencode |
 
 ## Personas
 
@@ -91,33 +97,20 @@ Personas are pre-configured agent personalities stored in `~/.agents/personas/`.
 - Output format
 - Default model (can be overridden with `--model`)
 
-| Persona | Description | Default Model |
-|---------|-------------|---------------|
-| `ego` | Direct model access, no constraints | (inherit) |
-| `opifex` | Issue worker - fixes issues and creates PRs | sonnet |
-| `columbo` | Root-cause investigator - diagnoses bugs | opus |
-| `augur` | Forward-consequence analyst - predicts impact | opus |
-| `titus` | TypeScript error fixer | qwen3 |
-| `cato` | PR reviewer | sonnet |
-| `galen` | Test failure diagnostician | deepseek |
-| `diogenes` | Free-spirit codebase explorer | sonnet |
-| `seneca` | Advisory document reviewer | gpt-5.2 |
-| `manager` | Coordinates other agents | sonnet |
-
 ## Architecture
 
 ```
 ~/.agents/
-├── runs/           # Run data
-│   └── <run-id>/
-│       ├── run.json      # Metadata
-│       ├── output.log    # Raw output
-│       ├── response.md   # Final response
-│       ├── home/         # Isolated HOME
-│       └── repo/         # Git worktree (if repo specified)
-├── repos/          # Bare repo clones
+├── runs/           # Job directories (one per run)
+│   └── <id>/
+│       ├── run.json      # Metadata (status, pid, model, etc.)
+│       ├── output.log    # PTY output capture
+│       ├── response.md   # Final response (if completed)
+│       ├── home/         # Isolated HOME directory
+│       └── repo/         # Git worktree (if --repo specified)
+├── repos/          # Bare git repos (shared across runs)
 │   └── owner-repo.git
-└── personas/       # Persona definitions
+└── personas/       # Persona markdown files
     └── *.md
 ```
 
@@ -139,29 +132,35 @@ home/
 │   └── share/
 │       └── opencode -> ~/.local/share/opencode  # Symlink (if exists)
 └── .claude/
-    ├── CLAUDE.md -> ../AGENTS.md   # Symlink to run's assembled prompt
-    ├── settings.json               # Generated (permissions: bypassPermissions)
-    ├── debug/                      # Created by Claude at runtime
-    ├── projects/                   # Session data
-    ├── statsig/                    # Feature flags
-    └── todos/                      # Task tracking
+    ├── CLAUDE.md -> ../AGENTS.md   # Symlink to assembled prompt
+    ├── settings.json               # Generated (bypassPermissions)
+    └── ...                         # Runtime state (projects, debug, etc.)
 ```
 
-Credentials are copied/symlinked so agents can push to git and create PRs, but all Claude state (`.claude.json`, projects, debug logs) stays isolated per-run.
+Credentials are copied/symlinked so agents can push to git and create PRs, but all Claude state stays isolated per-run.
 
 ## How It Works
 
-1. **Run creation** - Generates unique ID, creates isolated HOME directory
-2. **Repo setup** (if specified) - Clones/fetches bare repo, creates worktree with new branch
-3. **Credential copying** - Symlinks SSH keys, gitconfig, gh auth to isolated HOME
-4. **Prompt assembly** - Combines persona + task + git instructions into `AGENTS.md`
-5. **Agent spawn** - Launches Claude/OpenCode in detached mode with pseudo-terminal
-6. **Monitoring** - Output captured to `output.log`, viewable via `watch`/`logs`
-7. **Completion** - Output promoted to `response.md`, status updated
+1. **Job creation** - Generates unique ID (`generaIdentem`), creates isolated HOME
+2. **Repo setup** (if specified) - Clones/fetches bare repo (`assecuraNudumRepositorium`), creates worktree (`creaArborem`)
+3. **Credential copying** - Copies SSH keys, gitconfig, symlinks gh auth (`copiaMandata`)
+4. **Prompt assembly** - Combines persona + task + git instructions (`componePromptum`)
+5. **Agent spawn** - Launches Claude/OpenCode with PTY via `script` (`generaAgentem`)
+6. **Monitoring** - Output captured to `output.log`, viewable via `jobs watch`/`jobs logs`
+7. **Completion** - Output promoted to `response.md`, status updated in `run.json`
+
+## Development
+
+Source is in `src/*.fab` (faber language). Build with:
+
+```bash
+bun run build    # faber compile + bun compile to bin/agent
+```
 
 ## Requirements
 
 - [Bun](https://bun.sh) runtime
+- [faber](https://github.com/ianzepp/faber) compiler
 - [Claude CLI](https://github.com/anthropics/claude-code) or [OpenCode](https://github.com/opencode-ai/opencode)
 - Git
 - GitHub CLI (`gh`) for PR creation
