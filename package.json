@@ -6,14 +6,9 @@
     "agent": "./bin/agent"
   },
   "scripts": {
-    "typecheck": "tsc --noEmit",
-    "build": "bun build src/cli.ts --outfile bin/agent --target bun",
-    "lint": "eslint src/",
-    "lint:fix": "eslint src/ --fix",
-    "check": "bun run typecheck && bun run lint"
+    "build": "faber build src/agent.fab && bun build --compile dist/src/agent.ts --outfile bin/agent"
   },
   "devDependencies": {
-    "@types/bun": "latest",
-    "typescript": "^5.0.0"
+    "@types/bun": "latest"
   }
 }

@@ -4,3 +4,4 @@ dist/
 faber/
 *.log
 .DS_Store
+*.bun-build
