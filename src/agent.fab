@@ -1,23 +1,35 @@
-# Agent CLI
+# ═══════════════════════════════════════════════════════════════════════════════
+# AGENS - Instrumentum CLI pro Agentibus AI
+# ═══════════════════════════════════════════════════════════════════════════════
 #
-# Compile: faber build src/agent.fab
-# Run: bun dist/src/agent.ts --help
+# Spawns isolated AI agent runs against GitHub repositories.
+# Each agent gets its own HOME directory, git worktree, and credentials.
+#
+# Aedificatio:  faber build src/agent.fab
+# Cursus:       bun dist/src/agent.ts --help
+# Compilatio:   bun build --compile dist/src/agent.ts --outfile bin/agent
+#
+# ═══════════════════════════════════════════════════════════════════════════════
 
-# Modules
-ex "./modules/jobs" importa * ut jobsModule
-ex "./modules/personas" importa * ut personasModule
-ex "./modules/models" importa * ut modelsModule
+# Moduli
+ex "./modules/jobs" importa * ut jobsModulum
+ex "./modules/personas" importa * ut personaeModulum
+ex "./modules/models" importa * ut exemplaresModulum
 
-# Commands
+# Imperia
 ex "./commands/run" importa runCommand
 
 @ cli "agent"
 @ versio "0.1.0"
 @ descriptio "CLI for spawning isolated AI agent runs"
-@ imperia "jobs" ex jobsModule
-@ imperia "personas" ex personasModule
-@ imperia "models" ex modelsModule
+@ imperia "jobs" ex jobsModulum
+@ imperia "personas" ex personaeModulum
+@ imperia "models" ex exemplaresModulum
 incipit argumenta args {}
+
+# ─────────────────────────────────────────────────────────────────────────────
+# versio - ostende versionem
+# ─────────────────────────────────────────────────────────────────────────────
 
 @ imperium "version"
 @ alias "v"
@@ -25,18 +37,22 @@ functio version() -> vacuum {
     scribe "agent v0.1.0"
 }
 
+# ─────────────────────────────────────────────────────────────────────────────
+# run - crea novum agentis munus
+# ─────────────────────────────────────────────────────────────────────────────
+
 @ imperium "run"
 @ descriptio "Spawn a new agent job"
 @ futura
-@ optio textus repo brevis "r" longum "repo" descriptio "Remote repository"
-@ optio numerus issue brevis "i" longum "issue" descriptio "Github issue number"
-@ optio textus model brevis "m" longum "model"
-@ optio textus persona longum "persona"
-@ optio bivalens pr longum "pr"
-@ optio numerus timeout longum "timeout"
-@ optio bivalens noValidate longum "no-validate"
+@ optio textus repo brevis "r" longum "repo" descriptio "GitHub repository (owner/repo)"
+@ optio numerus issue brevis "i" longum "issue" descriptio "GitHub issue number to work on"
+@ optio textus model brevis "m" longum "model" descriptio "Model shortcut or full name"
+@ optio textus persona longum "persona" descriptio "Persona to use for the agent"
+@ optio bivalens pr longum "pr" descriptio "Create PR when work is complete"
+@ optio numerus timeout longum "timeout" descriptio "Timeout in minutes"
+@ optio bivalens noValidate longum "no-validate" descriptio "Skip validation step"
 functio run(
-    textus goal,
+    textus finis,
     si textus repo,
     si numerus issue,
     si textus model,
@@ -46,7 +62,7 @@ functio run(
     si bivalens noValidate
 ) exitus code -> vacuum {
     tempta {
-        cede runCommand(goal, repo, issue, model, persona, pr, timeout, noValidate)
+        cede runCommand(finis, repo, issue, model, persona, pr, timeout, noValidate)
     }
     cape err {
         mone "Error:", err textatum

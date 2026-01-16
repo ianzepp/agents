@@ -1,171 +1,198 @@
-# Jobs Module - manage agent jobs
+# ═══════════════════════════════════════════════════════════════════════════════
+# MUNERA - Gestio Munera Agentium
+# ═══════════════════════════════════════════════════════════════════════════════
 #
-# Commands: jobs list|watch|logs|response|kill|clean
+# Commands for managing agent jobs: list, watch, logs, response, kill, clean
+#
+# ═══════════════════════════════════════════════════════════════════════════════
 
 ex "../norma/hal/solum" importa solum
 ex "../norma/hal/json" importa json
 ex "../norma/hal/processus" importa processus
 
-# Paths
-fixum AGENTS_ROOT = solum.iunge([solum.domus(), ".agents"])
-fixum RUNS_DIR = solum.iunge([AGENTS_ROOT, "runs"])
+# ─────────────────────────────────────────────────────────────────────────────
+# Viae - directory paths
+# ─────────────────────────────────────────────────────────────────────────────
+
+fixum RADIX_AGENTIUM = solum.iunge([solum.domus(), ".agents"])
+fixum VIA_MUNERUM = solum.iunge([RADIX_AGENTIUM, "runs"])
+
+functio viaMuneris(textus identi) -> textus {
+    redde solum.iunge([VIA_MUNERUM, identi])
+}
+
+functio viaMetadatorum(textus identi) -> textus {
+    redde solum.iunge([VIA_MUNERUM, identi, "run.json"])
+}
+
+functio viaExitus(textus identi) -> textus {
+    redde solum.iunge([VIA_MUNERUM, identi, "output.log"])
+}
+
+functio viaResponsi(textus identi) -> textus {
+    redde solum.iunge([VIA_MUNERUM, identi, "response.md"])
+}
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Auxiliares
+# ─────────────────────────────────────────────────────────────────────────────
 
 @ futura
-functio getJobIds() -> lista<textus> {
-    si non solum.exstat(RUNS_DIR) {
+functio colligeMuneraIds() -> lista<textus> {
+    si non solum.exstat(VIA_MUNERUM) {
         redde [] innatum lista<textus>
     }
-    redde cede solum.elenca(RUNS_DIR)
+    redde cede solum.elenca(VIA_MUNERUM)
 }
 
-functio jobDir(textus id) -> textus {
-    redde solum.iunge([RUNS_DIR, id])
-}
-
-functio jobMetaPath(textus id) -> textus {
-    redde solum.iunge([RUNS_DIR, id, "run.json"])
-}
-
-functio jobLogPath(textus id) -> textus {
-    redde solum.iunge([RUNS_DIR, id, "output.log"])
-}
-
-functio jobResponsePath(textus id) -> textus {
-    redde solum.iunge([RUNS_DIR, id, "response.md"])
-}
+# ─────────────────────────────────────────────────────────────────────────────
+# Modulum
+# ─────────────────────────────────────────────────────────────────────────────
 
 @ descriptio "Manage agent jobs"
 incipit {}
 
-# ─────────────────────────────────────────────────────────────────────────────
-# list - show all jobs with status
-# ─────────────────────────────────────────────────────────────────────────────
+# ═══════════════════════════════════════════════════════════════════════════════
+# list - enumera omnia munera cum statu
+# ═══════════════════════════════════════════════════════════════════════════════
 
 @ imperium "list"
 @ alias "ls"
 @ descriptio "List all jobs with status"
 @ futura
 functio list() -> vacuum {
-    fixum ids = cede getJobIds()
+    fixum identitates = cede colligeMuneraIds()
 
-    si ids.length == 0 {
+    si identitates.length == 0 {
         scribe "No jobs found."
         redde
     }
 
     scribe "ID         REPO                           ISSUE   MODEL             STATUS"
 
-    ex ids pro id {
-        fixum metaPath = jobMetaPath(id)
-        si non solum.exstat(metaPath) ergo perge
+    ex identitates pro identi {
+        fixum viaMetae = viaMetadatorum(identi)
+        si non solum.exstat(viaMetae) ergo perge
 
-        fixum content = cede solum.lege(metaPath)
-        fixum job = json.pange(content)
+        fixum contentum = cede solum.lege(viaMetae)
+        fixum munus = json.pange(contentum)
 
-        fixum repo = job.repo vel "(no repo)"
-        fixum issue = job.issue sic scriptum("#§", job.issue) secus "-"
-        fixum model = job.model vel "unknown"
-        fixum status = job.status vel "unknown"
+        fixum repositorium = munus.repo vel "(no repo)"
+        fixum numerusIssue = munus.issue sic scriptum("#§", munus.issue) secus "-"
+        fixum exemplar = munus.model vel "unknown"
+        fixum status = munus.status vel "unknown"
 
-        scribe scriptum("§  §  §  §  §", id, repo, issue, model, status)
+        scribe scriptum("§  §  §  §  §", identi, repositorium, numerusIssue, exemplar, status)
     }
 }
 
-# ─────────────────────────────────────────────────────────────────────────────
-# watch - follow job output in real-time
-# ─────────────────────────────────────────────────────────────────────────────
+# ═══════════════════════════════════════════════════════════════════════════════
+# watch - sequere exitum muneris in tempore reali
+# ═══════════════════════════════════════════════════════════════════════════════
 
 @ imperium "watch"
 @ descriptio "Follow job output in real-time"
 @ futura
-functio watch(textus id) -> vacuum {
-    fixum logPath = jobLogPath(id)
+functio watch(textus identi) -> vacuum {
+    fixum viaExituum = viaExitus(identi)
 
-    si non solum.exstat(logPath) {
-        mone scriptum("Job § not found or has no output", id)
+    si non solum.exstat(viaExituum) {
+        mone scriptum("Job § not found or has no output", identi)
         redde
     }
 
-    # TODO: implement tail -f behavior
-    scribe scriptum("TODO: watch §", id)
+    # Sequere exitum cum tail -f
+    processus.exsequi(scriptum("tail -f §", viaExituum))
 }
 
-# ─────────────────────────────────────────────────────────────────────────────
-# logs - show full job log
-# ─────────────────────────────────────────────────────────────────────────────
+# ═══════════════════════════════════════════════════════════════════════════════
+# logs - ostende plenum muneris exitum
+# ═══════════════════════════════════════════════════════════════════════════════
 
 @ imperium "logs"
 @ descriptio "Show full job log"
 @ futura
-functio logs(textus id) -> vacuum {
-    fixum logPath = jobLogPath(id)
+functio logs(textus identi) -> vacuum {
+    fixum viaExituum = viaExitus(identi)
 
-    si non solum.exstat(logPath) {
-        mone scriptum("Job § not found or has no output", id)
+    si non solum.exstat(viaExituum) {
+        mone scriptum("Job § not found or has no output", identi)
         redde
     }
 
-    fixum content = cede solum.lege(logPath)
-    scribe content
+    fixum contentum = cede solum.lege(viaExituum)
+    scribe contentum
 }
 
-# ─────────────────────────────────────────────────────────────────────────────
-# response - show final response
-# ─────────────────────────────────────────────────────────────────────────────
+# ═══════════════════════════════════════════════════════════════════════════════
+# response - ostende responsum finale
+# ═══════════════════════════════════════════════════════════════════════════════
 
 @ imperium "response"
 @ descriptio "Show final response (if completed)"
 @ futura
-functio response(textus id) -> vacuum {
-    fixum responsePath = jobResponsePath(id)
+functio response(textus identi) -> vacuum {
+    fixum viaResponsum = viaResponsi(identi)
 
-    si non solum.exstat(responsePath) {
-        mone scriptum("Job § has no response yet", id)
+    si non solum.exstat(viaResponsum) {
+        mone scriptum("Job § has no response yet", identi)
         redde
     }
 
-    fixum content = cede solum.lege(responsePath)
-    scribe content
+    fixum contentum = cede solum.lege(viaResponsum)
+    scribe contentum
 }
 
-# ─────────────────────────────────────────────────────────────────────────────
-# kill - stop a running job
-# ─────────────────────────────────────────────────────────────────────────────
+# ═══════════════════════════════════════════════════════════════════════════════
+# kill - siste munus currens
+# ═══════════════════════════════════════════════════════════════════════════════
 
 @ imperium "kill"
 @ descriptio "Stop a running job"
 @ futura
-functio kill(textus id) -> vacuum {
-    fixum metaPath = jobMetaPath(id)
+functio kill(textus identi) -> vacuum {
+    fixum viaMetae = viaMetadatorum(identi)
 
-    si non solum.exstat(metaPath) {
-        mone scriptum("Job § not found", id)
+    si non solum.exstat(viaMetae) {
+        mone scriptum("Job § not found", identi)
         redde
     }
 
-    fixum content = cede solum.lege(metaPath)
-    fixum job = json.pange(content)
+    fixum contentum = cede solum.lege(viaMetae)
+    fixum munus = json.pange(contentum)
 
-    si job.status != "running" {
-        mone scriptum("Job § is not running (status: §)", id, job.status)
+    si munus.status != "running" {
+        mone scriptum("Job § is not running (status: §)", identi, munus.status)
         redde
     }
 
-    # TODO: send SIGTERM to job.pid
-    scribe scriptum("TODO: kill PID §", job.pid)
+    # Mitte SIGTERM ad processum
+    si munus.pid {
+        processus.exsequi(scriptum("kill §", munus.pid))
+        scribe scriptum("Sent SIGTERM to PID §", munus.pid)
+    }
+    secus {
+        mone "Job has no PID recorded"
+    }
 }
 
-# ─────────────────────────────────────────────────────────────────────────────
-# clean - remove old jobs
-# ─────────────────────────────────────────────────────────────────────────────
+# ═══════════════════════════════════════════════════════════════════════════════
+# clean - remove munera vetera
+# ═══════════════════════════════════════════════════════════════════════════════
 
 @ imperium "clean"
 @ descriptio "Remove old jobs"
+@ optio bivalens all longum "all" descriptio "Remove all jobs"
+@ optio textus olderThan longum "older-than" descriptio "Remove jobs older than (e.g., 7d, 24h)"
 @ futura
 functio clean(si bivalens all, si textus olderThan) -> vacuum {
     si all {
-        # TODO: remove all job directories
-        scribe "TODO: clean all jobs"
+        fixum identitates = cede colligeMuneraIds()
+        ex identitates pro identi {
+            fixum via = viaMuneris(identi)
+            processus.exsequi(scriptum("rm -rf §", via))
+        }
+        scribe scriptum("Removed § job(s)", identitates.length)
         redde
     }
 

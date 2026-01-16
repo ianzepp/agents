@@ -1,73 +1,85 @@
-# Personas Module - manage agent personas
+# ═══════════════════════════════════════════════════════════════════════════════
+# PERSONAE - Gestio Personarum Agentium
+# ═══════════════════════════════════════════════════════════════════════════════
 #
-# Commands: personas list|show
+# Personas define agent behavior, style, and default model. Stored as markdown
+# files in ~/.agents/personas/ with optional YAML frontmatter.
+#
+# ═══════════════════════════════════════════════════════════════════════════════
 
 ex "../norma/hal/solum" importa solum
 
-# Paths
-fixum AGENTS_ROOT = solum.iunge([solum.domus(), ".agents"])
-fixum PERSONAS_DIR = solum.iunge([AGENTS_ROOT, "personas"])
+# ─────────────────────────────────────────────────────────────────────────────
+# Viae
+# ─────────────────────────────────────────────────────────────────────────────
+
+fixum RADIX_AGENTIUM = solum.iunge([solum.domus(), ".agents"])
+fixum VIA_PERSONARUM = solum.iunge([RADIX_AGENTIUM, "personas"])
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Modulum
+# ─────────────────────────────────────────────────────────────────────────────
 
 @ descriptio "Manage agent personas"
 incipit {}
 
-# ─────────────────────────────────────────────────────────────────────────────
-# list - show all available personas
-# ─────────────────────────────────────────────────────────────────────────────
+# ═══════════════════════════════════════════════════════════════════════════════
+# list - enumera personas praesto
+# ═══════════════════════════════════════════════════════════════════════════════
 
 @ imperium "list"
 @ alias "ls"
 @ descriptio "List available personas"
 @ futura
 functio list() -> vacuum {
-    si non solum.exstat(PERSONAS_DIR) {
+    si non solum.exstat(VIA_PERSONARUM) {
         scribe "No personas directory found."
-        scribe scriptum("Create personas in §", PERSONAS_DIR)
+        scribe scriptum("Create personas in §", VIA_PERSONARUM)
         redde
     }
 
-    fixum files = cede solum.elenca(PERSONAS_DIR)
-    fixum mdFiles = files.filter(pro f: f.endsWith(".md"))
+    fixum fasciculi = cede solum.elenca(VIA_PERSONARUM)
+    fixum mdFasciculi = fasciculi.filter(pro f: f.endsWith(".md"))
 
-    si mdFiles.length == 0 {
+    si mdFasciculi.length == 0 {
         scribe "No personas found."
         redde
     }
 
     scribe "Available personas:\n"
 
-    ex mdFiles pro file {
-        fixum name = file.replace(".md", "")
-        fixum path = solum.iunge([PERSONAS_DIR, file])
-        fixum content = cede solum.lege(path)
+    ex mdFasciculi pro fasciculus {
+        fixum nomen = fasciculus.replace(".md", "")
+        fixum via = solum.iunge([VIA_PERSONARUM, fasciculus])
+        fixum contentum = cede solum.lege(via)
 
-        # Extract description from frontmatter
-        fixum descMatch = content.match(sed "^description:\\s*(.+)$" m)
-        fixum desc = descMatch sic descMatch[1] secus "(no description)"
+        # Extrahe descriptionem e frontmatter
+        fixum descMatch = contentum.match(sed "^description:\\s*(.+)$" m)
+        fixum descriptio = descMatch sic descMatch[1] secus "(no description)"
 
-        # Extract model from frontmatter
-        fixum modelMatch = content.match(sed "^model:\\s*(.+)$" m)
-        fixum model = modelMatch sic modelMatch[1] secus "-"
+        # Extrahe exemplar e frontmatter
+        fixum modelMatch = contentum.match(sed "^model:\\s*(.+)$" m)
+        fixum exemplar = modelMatch sic modelMatch[1] secus "-"
 
-        scribe scriptum("  §\t§\t(§)", name, desc, model)
+        scribe scriptum("  §\t§\t(§)", nomen, descriptio, exemplar)
     }
 }
 
-# ─────────────────────────────────────────────────────────────────────────────
-# show - display persona details
-# ─────────────────────────────────────────────────────────────────────────────
+# ═══════════════════════════════════════════════════════════════════════════════
+# show - ostende detalia personae
+# ═══════════════════════════════════════════════════════════════════════════════
 
 @ imperium "show"
 @ descriptio "Show persona details"
 @ futura
-functio show(textus name) -> vacuum {
-    fixum path = solum.iunge([PERSONAS_DIR, scriptum("§.md", name)])
+functio show(textus nomen) -> vacuum {
+    fixum via = solum.iunge([VIA_PERSONARUM, scriptum("§.md", nomen)])
 
-    si non solum.exstat(path) {
-        mone scriptum("Persona '§' not found", name)
+    si non solum.exstat(via) {
+        mone scriptum("Persona '§' not found", nomen)
         redde
     }
 
-    fixum content = cede solum.lege(path)
-    scribe content
+    fixum contentum = cede solum.lege(via)
+    scribe contentum
 }
