@@ -317,31 +317,18 @@ functio generaAgentem(textus identi, textus dorsale, textus exemplar, textus fin
 
     fixum domus = viaDomus(identi)
     fixum viaExituum = viaExitus(identi)
-    fixum viaPid = solum.iunge([viaMuneris(identi), "pid"])
 
-    varia textus mandatum = ""
+    # Build args array for script PTY wrapper
+    varia lista<textus> args = ["script", "-q", viaExituum] innatum lista<textus>
     si dorsale == "claude" {
-        mandatum = scriptum("claude --model § -p \"§\"", exemplar, finis.replace("\"", "\\\""))
+        args = args.concat(["claude", "--model", exemplar, "-p", finis])
     }
     secus {
-        mandatum = scriptum("opencode run --model § \"Follow AGENTS.md. Task: §\"", exemplar, finis.replace("\"", "\\\""))
+        args = args.concat(["opencode", "run", "--model", exemplar, scriptum("Follow AGENTS.md. Task: §", finis)])
     }
 
-    # Genera processum separatum cum HOME personali utens `script` pro PTY
-    # Scribe PID ad fasciculum quia captura e processu in fundo difficilis est
-    fixum mandatumGenerandi = scriptum("cd § && HOME=§ nohup script -q § § > /dev/null 2>&1 & echo $! > §", viaLaborandi, domus, viaExituum, mandatum, viaPid)
-    processus.exsequi(mandatumGenerandi)
-
-    # Parva mora ut PID fasciculus scribatur
-    processus.exsequi("sleep 0.1")
-
-    # Lege PID e fasciculo
-    custodi {
-        si non solum.exstat(viaPid) reddit 0
-    }
-
-    fixum pidTextus = cede solum.lege(viaPid)
-    redde pidTextus.trim() numeratum
+    # Spawn detached process with isolated HOME, returns PID directly
+    redde processus.genera(args, viaLaborandi, { "HOME": domus })
 }
 
 # ═══════════════════════════════════════════════════════════════════════════════
