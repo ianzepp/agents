@@ -180,6 +180,175 @@ functio kill(textus identi) -> vacuum {
 # clean - remove munera vetera
 # ═══════════════════════════════════════════════════════════════════════════════
 
+# ═══════════════════════════════════════════════════════════════════════════════
+# debug - ostende informationem de errore muneris
+# ═══════════════════════════════════════════════════════════════════════════════
+
+@ imperium "debug"
+@ descriptio "Show debug information for a job"
+@ futura
+functio debug(textus identi) -> vacuum {
+    fixum viaMetae = viaMetadatorum(identi)
+
+    si non solum.exstat(viaMetae) {
+        mone scriptum("Job § not found", identi)
+        redde
+    }
+
+    # ─────────────────────────────────────────────────────────────────────────
+    # Load metadata
+    # ─────────────────────────────────────────────────────────────────────────
+
+    fixum contentum = cede solum.lege(viaMetae)
+    fixum munus = json.pange(contentum)
+
+    fixum repositorium = munus.repo vel "(no repo)"
+    fixum numerusIssue = munus.issue vel "-"
+    fixum exemplar = munus.model vel "unknown"
+    fixum status = munus.status vel "unknown"
+    fixum pid = munus.pid vel 0
+    fixum ramus = munus.branch vel "(none)"
+    fixum startedAt = munus.startedAt vel "unknown"
+
+    # ─────────────────────────────────────────────────────────────────────────
+    # Check if process is alive
+    # ─────────────────────────────────────────────────────────────────────────
+
+    varia processAlive = falsum
+    varia processStatus = "not found"
+
+    si pid > 0 {
+        fixum exitCode = processus.exsequiCodem(scriptum("ps -p § > /dev/null 2>&1", pid))
+        si exitCode == 0 {
+            processAlive = verum
+            processStatus = "running"
+        } secus {
+            processStatus = scriptum("dead (pid § not found)", pid)
+        }
+    } secus {
+        processStatus = "no PID recorded"
+    }
+
+    # ─────────────────────────────────────────────────────────────────────────
+    # Check repo state
+    # ─────────────────────────────────────────────────────────────────────────
+
+    fixum viaRepo = solum.iunge([viaMuneris(identi), "repo"])
+    varia repoExists = solum.exstat(viaRepo)
+    varia repoStatus = "(no repo)"
+    varia branchExists = falsum
+    varia uncommittedChanges = "(none)"
+    varia implementationFiles = "(none)"
+
+    si repoExists {
+        # Check git status
+        fixum gitStatusOutput = processus.exsequi(scriptum("cd § && git status --porcelain 2>/dev/null || echo 'ERROR'", viaRepo))
+
+        si gitStatusOutput == "ERROR" {
+            repoStatus = "not a git repo"
+        } sin gitStatusOutput.trim() == "" {
+            repoStatus = "clean"
+            uncommittedChanges = "(none)"
+        } secus {
+            repoStatus = "has changes"
+            uncommittedChanges = gitStatusOutput.trim()
+        }
+
+        # Check if branch exists
+        fixum branchCheck = processus.exsequiCodem(scriptum("cd § && git rev-parse --verify § > /dev/null 2>&1", viaRepo, ramus))
+        branchExists = branchCheck == 0
+
+        # Check for implementation file changes (exclude AGENTS.md, .claude, etc)
+        fixum implChanges = processus.exsequi(scriptum("cd § && git status --porcelain 2>/dev/null | grep -v 'AGENTS.md' | grep -v '.claude' | grep -v 'output.log' || true", viaRepo))
+        si implChanges.trim() != "" {
+            implementationFiles = implChanges.trim()
+        }
+    }
+
+    # ─────────────────────────────────────────────────────────────────────────
+    # Get last output lines
+    # ─────────────────────────────────────────────────────────────────────────
+
+    fixum viaExituum = viaExitus(identi)
+    varia lastOutput = "(no output)"
+    varia outputSize = 0
+
+    si solum.exstat(viaExituum) {
+        outputSize = cede solum.magnitudo(viaExituum)
+        # Use sed to strip ANSI codes, then tail
+        fixum tailOutput = processus.exsequi(scriptum("tail -5 § 2>/dev/null | sed 's/\\x1b\\[[0-9;]*[mKhl]//g' | sed 's/\\[<u//g' | sed 's/\\[?[0-9]*[lh]//g' | head -c 500 || echo '(empty)'", viaExituum))
+        lastOutput = tailOutput.trim()
+    }
+
+    # ─────────────────────────────────────────────────────────────────────────
+    # Determine diagnosis
+    # ─────────────────────────────────────────────────────────────────────────
+
+    varia diagnosis = "Unknown state"
+
+    si processAlive {
+        diagnosis = "Job is still running"
+    } sin status == "running" et non processAlive {
+        # Status says running but process is dead
+        si lastOutput.includes("Invalid API key") {
+            diagnosis = "Died: Invalid API key - check ANTHROPIC_API_KEY"
+        } sin lastOutput.includes("isn't a git repository") {
+            diagnosis = "Died: No git repository - missing --repo flag?"
+        } sin lastOutput.includes("rate limit") aut lastOutput.includes("429") {
+            diagnosis = "Died: Rate limited by API"
+        } sin lastOutput.includes("timeout") aut lastOutput.includes("Timeout") {
+            diagnosis = "Died: Request timeout"
+        } sin outputSize < 100 {
+            diagnosis = "Died: Early failure before producing output"
+        } sin implementationFiles != "(none)" {
+            diagnosis = "Died: Has implementation changes - may be salvageable"
+        } secus {
+            diagnosis = "Died: Completed analysis but died before implementation"
+        }
+    } sin status == "completed" {
+        diagnosis = "Job completed successfully"
+    } sin status == "failed" {
+        diagnosis = "Job marked as failed"
+    }
+
+    # ─────────────────────────────────────────────────────────────────────────
+    # Output
+    # ─────────────────────────────────────────────────────────────────────────
+
+    scribe ""
+    scribe scriptum("Job: §", identi)
+    scribe scriptum("Status: § (recorded) / § (actual)", status, processStatus)
+    scribe scriptum("Repo: §", repositorium)
+    scribe scriptum("Issue: §", numerusIssue)
+    scribe scriptum("Branch: §", ramus)
+    scribe scriptum("Model: §", exemplar)
+    scribe scriptum("Started: §", startedAt)
+    scribe scriptum("PID: §", pid)
+    scribe ""
+    scribe "Process:"
+    scribe scriptum("  Alive: §", processAlive)
+    scribe scriptum("  Status: §", processStatus)
+    scribe ""
+    scribe "Repo State:"
+    scribe scriptum("  Path: §", repoExists sic viaRepo secus "(none)")
+    scribe scriptum("  Exists: §", repoExists)
+    scribe scriptum("  Branch exists: §", branchExists)
+    scribe scriptum("  Status: §", repoStatus)
+    scribe scriptum("  Uncommitted: §", uncommittedChanges)
+    scribe scriptum("  Implementation files: §", implementationFiles)
+    scribe ""
+    scribe "Output:"
+    scribe scriptum("  Size: § bytes", outputSize)
+    scribe "  Last lines:"
+    # Indent each line of output
+    ex lastOutput.split("\n") pro line {
+        scribe scriptum("    §", line)
+    }
+    scribe ""
+    scribe scriptum("Diagnosis: §", diagnosis)
+    scribe ""
+}
+
 @ imperium "clean"
 @ descriptio "Remove old jobs"
 @ optio bivalens all longum "all" descriptio "Remove all jobs"
