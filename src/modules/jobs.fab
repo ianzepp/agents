@@ -45,6 +45,44 @@ functio colligeMuneraIds() -> lista<textus> {
     redde cede solum.elenca(VIA_MUNERUM)
 }
 
+# Reconcile job status by checking if PID is still alive
+# Updates run.json if process died but status still shows "running"
+@ futura
+functio reconciliaStatum(textus identi) -> vacuum {
+    fixum viaMetae = viaMetadatorum(identi)
+    si non solum.exstat(viaMetae) {
+        redde
+    }
+
+    fixum contentum = cede solum.lege(viaMetae)
+    fixum munus = json.pange(contentum)
+
+    # Only reconcile if status is "running"
+    si munus.status != "running" {
+        redde
+    }
+
+    fixum pid = munus.pid vel 0
+    si pid <= 0 {
+        redde
+    }
+
+    # Check if process is alive
+    fixum exitCode = processus.exsequiCodem("ps -p " + pid textatum + " > /dev/null 2>&1")
+    si exitCode == 0 {
+        redde
+    }
+
+    # Process is dead - update status
+    fixum viaResponsum = viaResponsi(identi)
+    fixum novusStatus = solum.exstat(viaResponsum) sic "completed" secus "failed"
+
+    munus.status = novusStatus
+    munus.reconciledAt = (novum Date()).toISOString()
+
+    cede solum.scribe(viaMetae, json.solvePulchre(munus, 2))
+}
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Modulum
 # ─────────────────────────────────────────────────────────────────────────────
@@ -73,6 +111,9 @@ functio list() -> vacuum {
     ex identitates pro identi {
         fixum viaMetae = viaMetadatorum(identi)
         si non solum.exstat(viaMetae) ergo perge
+
+        # Reconcile status before displaying
+        cede reconciliaStatum(identi)
 
         fixum contentum = cede solum.lege(viaMetae)
         fixum munus = json.pange(contentum)
@@ -194,6 +235,9 @@ functio debug(textus identi) -> vacuum {
         mone scriptum("Job § not found", identi)
         redde
     }
+
+    # Reconcile status before debugging
+    cede reconciliaStatum(identi)
 
     # ─────────────────────────────────────────────────────────────────────────
     # Load metadata
