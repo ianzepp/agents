@@ -40,26 +40,32 @@ fixum VIA_REPOSITORIORUM = solum.iunge([RADIX_AGENTIUM, "repos"])
 fixum VIA_PERSONARUM = solum.iunge([RADIX_AGENTIUM, "personas"])
 
 functio viaMuneris(textus identi) -> textus {
+    custodi { si non identi iacit "Job ID required" }
     redde solum.iunge([VIA_MUNERUM, identi])
 }
 
 functio viaDomus(textus identi) -> textus {
+    custodi { si non identi iacit "Job ID required" }
     redde solum.iunge([VIA_MUNERUM, identi, "home"])
 }
 
 functio viaLaboris(textus identi) -> textus {
+    custodi { si non identi iacit "Job ID required" }
     redde solum.iunge([VIA_MUNERUM, identi, "repo"])
 }
 
 functio viaExitus(textus identi) -> textus {
+    custodi { si non identi iacit "Job ID required" }
     redde solum.iunge([VIA_MUNERUM, identi, "output.log"])
 }
 
 functio viaMetadatorum(textus identi) -> textus {
+    custodi { si non identi iacit "Job ID required" }
     redde solum.iunge([VIA_MUNERUM, identi, "run.json"])
 }
 
 functio viaNudiRepositorii(textus repositorium) -> textus {
+    custodi { si non repositorium iacit "Repository name required" }
     # owner/repo -> owner-repo.git
     redde solum.iunge([VIA_REPOSITORIORUM, repositorium.replace("/", "-") + ".git"])
 }
@@ -82,8 +88,19 @@ functio generaIdentem() -> textus {
 }
 
 functio transferExemplar(textus compendium) -> textus {
-    si compendium.includes("/") ergo redde compendium
-    redde COMPENDIA_EXEMPLARIUM[compendium] vel compendium
+    custodi {
+        si non compendium vel compendium.trim().length == 0 iacit "Model name required"
+    }
+
+    # Full model path (e.g., "openrouter/anthropic/claude-3")
+    si compendium.includes("/") reddit compendium
+
+    # Known alias
+    si COMPENDIA_EXEMPLARIUM[compendium] reddit COMPENDIA_EXEMPLARIUM[compendium]
+
+    # Unknown alias - warn but allow (might be a new Claude model name)
+    mone scriptum("Unknown model alias '§', using as-is", compendium)
+    redde compendium
 }
 
 functio detegeDorsale(textus exemplar) -> textus {
@@ -101,6 +118,10 @@ functio generaRamum(textus exemplar, textus identi, si numerus numerusIssue) -> 
 # ═══════════════════════════════════════════════════════════════════════════════
 
 functio assecuraNudumRepositorium(textus repositorium) -> vacuum {
+    custodi {
+        si non repositorium.includes("/") iacit "Repository must be owner/repo format"
+    }
+
     fixum viaNudi = viaNudiRepositorii(repositorium)
 
     si non solum.exstat(viaNudi) {
@@ -121,6 +142,12 @@ functio invenitRamusPrincipalis(textus viaNudi) -> textus {
 
 functio creaArborem(textus identi, textus repositorium, textus ramus) -> vacuum {
     fixum viaNudi = viaNudiRepositorii(repositorium)
+
+    custodi {
+        si non solum.exstat(viaNudi) iacit scriptum("Bare repository not found at §", viaNudi)
+        si non ramus vel ramus.trim().length == 0 iacit "Branch name required"
+    }
+
     fixum viaArboris = viaLaboris(identi)
     fixum ramusPrincipalis = invenitRamusPrincipalis(viaNudi)
 
@@ -137,6 +164,10 @@ functio creaArborem(textus identi, textus repositorium, textus ramus) -> vacuum 
 
 @ futura
 functio copiaMandata(textus destinatioDomus) -> vacuum {
+    custodi {
+        si non destinatioDomus vel destinatioDomus.trim().length == 0 iacit "Destination HOME directory required"
+    }
+
     fixum veraDomus = solum.domus()
 
     # Copia .gitconfig si exstat
@@ -239,6 +270,12 @@ functio componePromptum(textus finis, bivalens habetRepo, bivalens submittePr, s
 
 @ futura
 functio praeparaDomusIsolatam(textus identi, textus viaLaborandi, textus finis, bivalens habetRepo, bivalens submittePr, si textus contentumPersonae) -> vacuum {
+    custodi {
+        si non identi vel identi.trim().length == 0 iacit "Job ID required"
+        si non viaLaborandi vel viaLaborandi.trim().length == 0 iacit "Working directory required"
+        si non finis vel finis.trim().length == 0 iacit "Task description required"
+    }
+
     fixum domus = viaDomus(identi)
 
     # Crea .claude directorium
@@ -272,6 +309,12 @@ functio praeparaDomusIsolatam(textus identi, textus viaLaborandi, textus finis, 
 
 @ futura
 functio generaAgentem(textus identi, textus dorsale, textus exemplar, textus finis, textus viaLaborandi) -> numerus {
+    # Validate backend tool is available
+    custodi {
+        si dorsale == "claude" et processus.exsequiCodem("which claude") != 0 iacit "claude CLI not found in PATH"
+        si dorsale == "opencode" et processus.exsequiCodem("which opencode") != 0 iacit "opencode CLI not found in PATH"
+    }
+
     fixum domus = viaDomus(identi)
     fixum viaExituum = viaExitus(identi)
     fixum viaPid = solum.iunge([viaMuneris(identi), "pid"])
@@ -293,12 +336,12 @@ functio generaAgentem(textus identi, textus dorsale, textus exemplar, textus fin
     processus.exsequi("sleep 0.1")
 
     # Lege PID e fasciculo
-    si solum.exstat(viaPid) {
-        fixum pidTextus = cede solum.lege(viaPid)
-        redde pidTextus.trim() numeratum
+    custodi {
+        si non solum.exstat(viaPid) reddit 0
     }
 
-    redde 0
+    fixum pidTextus = cede solum.lege(viaPid)
+    redde pidTextus.trim() numeratum
 }
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -317,6 +360,25 @@ functio runCommand(
     si numerus tempusMortis,
     si bivalens sineValidatione
 ) -> vacuum {
+    # Validate inputs
+    custodi {
+        si non finis vel finis.trim().length == 0 iacit "Task description required"
+        si repositorium et non repositorium.includes("/") iacit "Repository must be owner/repo format"
+        si numerusIssue et numerusIssue <= 0 iacit "Issue number must be positive"
+        si tempusMortis et tempusMortis <= 0 iacit "Timeout must be positive"
+    }
+
+    # Validate environment
+    custodi {
+        si processus.exsequiCodem("which git") != 0 iacit "git not found in PATH"
+    }
+
+    # Validate persona exists (if specified)
+    si persona {
+        fixum viaPersonae = solum.iunge([VIA_PERSONARUM, scriptum("§.md", persona)])
+        si non solum.exstat(viaPersonae) iacit scriptum("Persona '§' not found at §", persona, viaPersonae)
+    }
+
     fixum identi = generaIdentem()
     fixum exemplarResolutum = transferExemplar(exemplar vel "sonnet")
     fixum dorsale = detegeDorsale(exemplarResolutum)
@@ -362,16 +424,11 @@ functio runCommand(
         cede solum.creaDir(viaLaborandi)
     }
 
-    # Onera contentum personae si specificatum
+    # Onera contentum personae si specificatum (iam validatum in custodi)
     varia textus contentumPersonae = ""
     si persona {
         fixum viaPersonae = solum.iunge([VIA_PERSONARUM, scriptum("§.md", persona)])
-        si solum.exstat(viaPersonae) {
-            contentumPersonae = cede solum.lege(viaPersonae)
-        }
-        secus {
-            mone scriptum("Warning: persona '§' not found", persona)
-        }
+        contentumPersonae = cede solum.lege(viaPersonae)
     }
 
     # Praepara domum isolatam
