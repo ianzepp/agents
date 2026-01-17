@@ -39,7 +39,7 @@ functio list() -> vacuum {
     }
 
     fixum fasciculi = cede solum.elenca(VIA_PERSONARUM)
-    fixum mdFasciculi = fasciculi.filter(pro f: f.endsWith(".md"))
+    fixum mdFasciculi = fasciculi.filter(clausura f: f.endsWith(".md"))
 
     si mdFasciculi.length == 0 {
         scribe "No personas found."

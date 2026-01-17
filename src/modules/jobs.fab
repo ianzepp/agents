@@ -57,8 +57,9 @@ functio reconciliaStatum(textus identi) -> vacuum {
     fixum contentum = cede solum.lege(viaMetae)
     fixum munus = json.pange(contentum)
 
-    # Only reconcile if status is "running"
-    si munus.status != "running" {
+    # Skip completed jobs - trust that status
+    # Re-evaluate running and failed jobs (failed may be rescued by better detection)
+    si munus.status == "completed" {
         redde
     }
 
@@ -73,14 +74,46 @@ functio reconciliaStatum(textus identi) -> vacuum {
         redde
     }
 
-    # Process is dead - update status
-    fixum viaResponsum = viaResponsi(identi)
-    fixum novusStatus = solum.exstat(viaResponsum) sic "completed" secus "failed"
+    # Process is dead - determine status from multiple signals
+    fixum novusStatus = cede determinaStatum(identi)
 
     munus.status = novusStatus
     munus.reconciledAt = (novum Date()).toISOString()
 
     cede solum.scribe(viaMetae, json.solvePulchre(munus, 2))
+}
+
+# Determine job status from multiple signals
+@ futura
+functio determinaStatum(textus identi) -> textus {
+    # Signal 1: response.md exists
+    fixum viaResponsum = viaResponsi(identi)
+    si solum.exstat(viaResponsum) {
+        redde "completed"
+    }
+
+    # Signal 2: Output contains PR URL (gh pr create succeeded)
+    fixum viaExituum = viaExitus(identi)
+    si solum.exstat(viaExituum) {
+        fixum output = cede solum.lege(viaExituum)
+        si output.includes("github.com") et output.includes("/pull/") {
+            redde "completed"
+        }
+    }
+
+    # Signal 3: Repo is clean (changes were committed and pushed)
+    fixum viaRepo = solum.iunge([viaMuneris(identi), "repo"])
+    si solum.exstat(viaRepo) {
+        fixum gitStatus = processus.exsequi(scriptum("cd § && git status --porcelain 2>/dev/null", viaRepo)).trim()
+        fixum gitDiff = processus.exsequi(scriptum("cd § && git diff origin/main..HEAD --stat 2>/dev/null || git diff origin/master..HEAD --stat 2>/dev/null || echo ''", viaRepo)).trim()
+
+        # Clean working tree + has commits ahead of main = completed
+        si gitStatus == "" et gitDiff != "" {
+            redde "completed"
+        }
+    }
+
+    redde "failed"
 }
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -391,6 +424,42 @@ functio debug(textus identi) -> vacuum {
     scribe ""
     scribe scriptum("Diagnosis: §", diagnosis)
     scribe ""
+}
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# diff - ostende differentias ab initio rami
+# ═══════════════════════════════════════════════════════════════════════════════
+
+@ imperium "diff"
+@ descriptio "Show changes since branch creation"
+@ futura
+functio diff(textus identi) -> vacuum {
+    fixum viaMetae = viaMetadatorum(identi)
+
+    si non solum.exstat(viaMetae) {
+        mone scriptum("Job § not found", identi)
+        redde
+    }
+
+    fixum contentum = cede solum.lege(viaMetae)
+    fixum munus = json.pange(contentum)
+    fixum viaRepo = solum.iunge([viaMuneris(identi), "repo"])
+
+    si non solum.exstat(viaRepo) {
+        mone scriptum("Job § has no repo", identi)
+        redde
+    }
+
+    # Find merge-base with main (or master)
+    fixum mergeBase = processus.exsequi(scriptum("cd § && git merge-base main HEAD 2>/dev/null || git merge-base master HEAD 2>/dev/null || echo ''", viaRepo)).trim()
+
+    si mergeBase == "" {
+        mone "Could not find merge-base with main or master"
+        redde
+    }
+
+    # Show diff from merge-base to current working tree (includes uncommitted)
+    scribe processus.exsequi(scriptum("cd § && git diff §", viaRepo, mergeBase))
 }
 
 @ imperium "clean"

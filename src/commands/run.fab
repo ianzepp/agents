@@ -420,7 +420,7 @@ functio runCommand(
 
     # Praepara domum isolatam
     scribe "Setting up isolated HOME..."
-    cede praeparaDomusIsolatam(identi, viaLaborandi, finis, repositorium != nihil, pr vel falsum, contentumPersonae)
+    cede praeparaDomusIsolatam(identi, viaLaborandi, finis, nonnihil repositorium, pr vel falsum, contentumPersonae)
 
     # Genera agentem
     scribe scriptum("Spawning §...", dorsale)
